@@ -405,6 +405,15 @@ class TestRegister(Base):
                 out.append(fh.read())
         return out
 
+    def test_hidden_wins_over_btn_and_touch_targets(self):
+        js, html = self._src()
+        with open(os.path.join(HERE, "static", "css", "daftar.css"), encoding="utf-8") as fh:
+            css = fh.read()
+        self.assertIn("#reg [hidden]{display:none!important}", css)
+        self.assertIn('class="tools"', html)
+        self.assertRegex(css, r"\.tools\{[^}]*gap:\.75rem")   # >=8px between add-box / preview
+        self.assertRegex(js, r"Math\.min\(g, b\.w / 2\)")    # 44px grip, small boxes stay movable
+
     def test_compression_and_progress_contract(self):
         js, html = self._src()
         self.assertRegex(js, r"MAXSIDE\s*=\s*1600")

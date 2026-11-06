@@ -18,7 +18,7 @@ main{max-width:44rem;margin:0 auto;padding:0 1rem 4rem}
 #bar{height:100%;width:20%;background:var(--wine-2);transition:width .3s}
 .stepname{margin:.5rem 0 1rem;font-weight:600;color:var(--wine-2)}
 fieldset{border:0;padding:0;margin:0 0 1rem;min-width:0}
-fieldset[hidden]{display:none}
+#reg [hidden]{display:none!important}
 label{display:block;margin:1rem 0 .25rem;font-weight:600}
 label.chk{display:flex;align-items:flex-start;gap:.75rem;font-weight:400;min-height:44px;padding:.4rem 0}
 .chk input{width:24px;height:24px;margin:.1rem 0 0;flex:none}
@@ -49,3 +49,4 @@ summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-weig
 .kv{display:grid;grid-template-columns:max-content 1fr;gap:.4rem 1rem}.kv dt{font-weight:600}.kv dd{margin:0}
 @media(max-width:480px){.row{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){#bar{transition:none}}
+.tools{display:flex;gap:.75rem;flex-wrap:wrap;margin:1rem 0}

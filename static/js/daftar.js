@@ -191,10 +191,10 @@
   $("#ktp-src").addEventListener("change", function (e) { load(e.target.files[0]); });
   function pt(e) { var r = cv.getBoundingClientRect(), s = scale(); return { x: (e.clientX - r.left) * s, y: (e.clientY - r.top) * s }; }
   function hit(p) {
-    var g = HANDLE * scale() * 1.6;
+    var g = HANDLE * scale(); /* 44px zone centred on corner; inner reach capped to half the box so small boxes stay movable */
     for (var i = boxes.length - 1; i >= 0; i--) {
-      var b = boxes[i];
-      if (p.x >= b.x + b.w - g && p.x <= b.x + b.w + g / 2 && p.y >= b.y + b.h - g && p.y <= b.y + b.h + g / 2) return { i: i, mode: "size" };
+      var b = boxes[i], ix = Math.min(g, b.w / 2), iy = Math.min(g, b.h / 2);
+      if (p.x >= b.x + b.w - ix && p.x <= b.x + b.w + g && p.y >= b.y + b.h - iy && p.y <= b.y + b.h + g) return { i: i, mode: "size" };
       if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return { i: i, mode: "move" };
     }
     return null;
