@@ -169,3 +169,36 @@ Teks resmi syarat/privasi (masih DRAF), masa retensi KTP, harga dan durasi progr
 - Foto wajah, badan, dan KTP tersensor (diratakan dulu) diekspor ulang ke JPEG q0.85, sisi terpanjang <=1600 px. Ukuran file hasil harus **< 1.000.000 byte**; jika belum, dimensi diperkecil bertahap. Jika tetap tidak muat (sisi <=500 px), foto **ditolak** dan tidak dikirim.
 - Batas unggah: 10 MiB per file asli; body aplikasi 3x10 MiB + 512 KiB = 31.981.568 B (JSON 413); Nginx  = 33.554.432 B (413 HTML).
 - Format HEIC/HEIF hanya diterima jika browser bisa mendekodekan (Safari); server tetap menolak HEIC mentah. **Safari/HEIC belum diuji** (tidak ada Safari asli di lingkungan uji).
+
+## Tahap 3: Portal member (`/akun`)
+
+**Scope (sesuai brief):** login HP/email + password (`/akun/masuk`, sudah Tahap 2); timeline Pendaftaran → Pembayaran → Verifikasi → Aktif → Perkenalan;
+tagihan (rekening dari `BANK_INFO`, baris dipisah `|`; nominal + kode unik 3 digit; batas waktu; upload bukti; status Menunggu Bayar / Menunggu Dicek / Lunas / Ditolak + alasan);
+verifikasi KTP & foto (alasan penolakan + unggah ulang); kartu perkenalan (foto close up lewat route terautentikasi, usia, domisili, pendidikan, intro, alasan cocok, Tertarik/Tidak; kontak HP baru tampil jika KEDUANYA tertarik; slot dinner untuk Platinum);
+feedback 1-5 + catatan (hanya tim); edit profil (suku/agama/status berubah -> `perlu_review=1`); permintaan hapus akun (butuh password + centang; hanya antrean `deletion_requests` untuk Owner).
+
+**Kode:** `portal.py` (route), `templates/public/akun.html` + `profil.html`, CSS ditambah di `static/css/daftar.css`. Cookie `ack_member` terpisah dari staf; semua POST wajib CSRF; semua query dibatasi `member_id` sesi (IDOR -> 404).
+
+**Skema v3 (aditif, idempotent):** `payments` +`unique_code,due_at,proof_file_id,reject_reason`; `introductions` +`resp_a,resp_b,match_reason`; tabel baru `dinner_slots`, `feedback`, `deletion_requests`.
+Tagihan hanya dibuat jika harga program terisi (NULL = "Info harga via admin", tidak pernah gratis/tagihan karangan). Baris lama tanpa kode unik tetap tampil tanpa kode.
+
+**Batasan (sengaja, tahap 4 yang mengisi):** belum ada UI staf untuk membuat usulan perkenalan, slot dinner, menyetujui/menolak pembayaran & verifikasi, atau memproses hapus akun; kolom/tabel sudah siap. Staf tidak bisa melihat bukti transfer lewat `/berkas` sampai Tahap 4 (FILE_VIEWERS tidak diubah).
+Bukti transfer tersimpan terenkripsi (Fernet) di `data/private`; KTP tetap terenkripsi. Foto kandidat hanya via `/akun/foto/<id perkenalan>` (wajah pasangan pada perkenalan milik sendiri yang belum ditolak); foto/KTP sendiri tidak punya route member.
+
+### Pertanyaan terbuka (tidak ditebak)
+1. Batas waktu bayar: dipakai 48 jam (`db.PAY_HOURS`), belum dikonfirmasi klien.
+2. Harga program belum ada -> tagihan belum muncul; kode unik ditambahkan ke harga dasar (penambahan, bukan pengurangan).
+3. Jika salah satu pihak memilih "Tidak", pihak lain hanya melihat "menunggu" lalu kartu hilang? Saat ini kartu pihak yang menunggu tetap tampil sebagai "Menunggu", penolak tidak diungkap; kartu penolak disembunyikan. Perlu konfirmasi klien.
+4. Definisi "Aktif" = langganan `active` (diatur staf Tahap 4); "Perkenalan" selesai = ada pasangan saling tertarik.
+5. Penghapusan data: apa yang dihapus vs. disimpan untuk keperluan hukum/keuangan (retensi) menunggu keputusan Owner/klien.
+6. Slot dinner: kapan Platinum boleh memilih (dipakai: setelah saling tertarik); Gold/Private Concierge belum punya hak slot.
+7. Zona waktu batas bayar ditampilkan UTC; perlu WIB?
+8. Edit nama/tanggal lahir/HP/email lewat admin (tidak ada self-service, mencegah lolos gerbang 18+).
+
+### Backup, rollback, perintah teruji
+```
+venv/bin/python db.py backup data/ack.db data/ack.db.bak-pre-stage3-XXXX   # online, mode 600
+venv/bin/python db.py dryrun data/ack.db                                    # -> user_version = 3 pada salinan
+venv/bin/python -W error::ResourceWarning -m unittest -q test_stage0 test_stage1 test_stage2 test_stage3
+# rollback: systemctl stop ack; git checkout main; cp data/ack.db.bak-pre-stage3-XXXX data/ack.db; systemctl start ack
+```

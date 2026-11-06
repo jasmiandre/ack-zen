@@ -367,9 +367,10 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet_key, priv_dir):
                 sid = conn.execute("INSERT INTO subscriptions(member_id,program_id,status,created_at) VALUES(?,?,'pending',?)",
                                    (mid, prog["id"], now)).lastrowid
                 if prog["price_idr"]:  # NULL = unconfigured and 0 = free: neither gets an invoice
-                    conn.execute("INSERT INTO payments(invoice_code,subscription_id,amount_idr,status,created_at) "
-                                 "VALUES(?,?,?,'pending',?)",
-                                 (db.next_invoice_code(conn, date.today()), sid, prog["price_idr"], now))
+                    conn.execute("INSERT INTO payments(invoice_code,subscription_id,amount_idr,status,created_at,unique_code,due_at) "
+                                 "VALUES(?,?,?,'pending',?,?,?)",
+                                 (db.next_invoice_code(conn, date.today()), sid, prog["price_idr"], now,
+                                  db.new_unique_code(conn, prog["price_idr"]), db.due_iso()))
                 db.audit(conn, None, "member_register", f"member={code} review={clean['perlu_review']}")
         except sqlite3.IntegrityError as ex:
             _cleanup(written)
@@ -391,16 +392,6 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet_key, priv_dir):
                 os.unlink(os.path.join(priv_dir, n))
             except OSError:
                 pass
-
-    @app.get("/akun")
-    async def akun(request: Request):
-        s = current(request)
-        if not (s and s["member_id"]):
-            return RedirectResponse("/akun/masuk", 303)
-        m = conn.execute("SELECT code,full_name,status,perlu_review FROM members WHERE id=?", (s["member_id"],)).fetchone()
-        sub = conn.execute("SELECT p.name,p.price_idr,s.status FROM subscriptions s JOIN programs p ON p.id=s.program_id "
-                           "WHERE s.member_id=? ORDER BY s.id DESC LIMIT 1", (s["member_id"],)).fetchone()
-        return render("public/akun.html", sess=s, m=m, sub=sub, price=db.price_label)
 
     @app.get("/akun/masuk")
     async def masuk_form(request: Request):

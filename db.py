@@ -1,18 +1,20 @@
 """SQLite layer: schema, atomic codes, birth-date/age utilities. Dummy data only."""
 import os
 import re
+import secrets
 import shutil
 import sqlite3
 import sys
 import tempfile
 from contextlib import contextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 ROLES = ("owner", "finance", "verifier", "matchmaker", "event")
 ROLE_LABEL = {"owner": "Owner", "finance": "Admin Keuangan", "verifier": "Verifikator",
               "matchmaker": "Matchmaker", "event": "Event"}
 MIN_AGE = 18
-SCHEMA_VERSION = 2   # PRAGMA user_version; v2 = Stage 2 registration columns (additive, idempotent)
+SCHEMA_VERSION = 3   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal (additive, idempotent)
+PAY_HOURS = 48       # invoice deadline; client has not confirmed (README: Pertanyaan terbuka)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users_staff(
@@ -104,6 +106,22 @@ CREATE TABLE IF NOT EXISTS member_sessions(
   created_at INTEGER NOT NULL,
   expires_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS reg_attempts(id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, ip TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS dinner_slots(
+  id INTEGER PRIMARY KEY,
+  introduction_id INTEGER NOT NULL REFERENCES introductions(id),
+  starts_at TEXT NOT NULL, venue TEXT NOT NULL DEFAULT '',
+  picked_by INTEGER REFERENCES members(id));
+CREATE TABLE IF NOT EXISTS feedback(
+  id INTEGER PRIMARY KEY,
+  introduction_id INTEGER NOT NULL REFERENCES introductions(id),
+  member_id INTEGER NOT NULL REFERENCES members(id),
+  rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL,
+  UNIQUE(introduction_id, member_id));
+CREATE TABLE IF NOT EXISTS deletion_requests(
+  id INTEGER PRIMARY KEY,
+  member_id INTEGER NOT NULL REFERENCES members(id),
+  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','done','declined')), created_at TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS deletion_open_uq ON deletion_requests(member_id) WHERE status='open';
 CREATE TABLE IF NOT EXISTS audit_log(
   id INTEGER PRIMARY KEY, ts TEXT NOT NULL,
   staff_id INTEGER REFERENCES users_staff(id), action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '');
@@ -141,6 +159,11 @@ MEMBER_COLS = (
     ("pref_age_min", "INTEGER"), ("pref_age_max", "INTEGER"), ("pref_religion", "TEXT"),
     ("pref_domicile", "TEXT"), ("pref_notes", "TEXT"), ("publish_consent", "TEXT"), ("source", "TEXT"),
     ("perlu_review", "INTEGER NOT NULL DEFAULT 0 CHECK(perlu_review IN (0,1))"), ("consented_at", "TEXT"))
+V3_COLS = {"payments": (("unique_code", "INTEGER CHECK(unique_code IS NULL OR unique_code BETWEEN 1 AND 999)"),
+                        ("due_at", "TEXT"), ("proof_file_id", "INTEGER"), ("reject_reason", "TEXT")),
+           "introductions": (("resp_a", "TEXT CHECK(resp_a IS NULL OR resp_a IN ('tertarik','tidak'))"),
+                             ("resp_b", "TEXT CHECK(resp_b IS NULL OR resp_b IN ('tertarik','tidak'))"),
+                             ("match_reason", "TEXT"))}
 FILE_COLS = (("encrypted", "INTEGER NOT NULL DEFAULT 0 CHECK(encrypted IN (0,1))"),)
 
 
@@ -148,7 +171,7 @@ def migrate(conn):
     if conn.execute("PRAGMA user_version").fetchone()[0] >= SCHEMA_VERSION:
         return
     with tx(conn):
-        for table, cols in (("members", MEMBER_COLS), ("member_files", FILE_COLS)):
+        for table, cols in (("members", MEMBER_COLS), ("member_files", FILE_COLS), *V3_COLS.items()):
             have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
             for name, ddl in cols:
                 if name not in have:
@@ -217,6 +240,17 @@ def _bump(conn, name):
 
 def next_invoice_code(conn, d):
     return f"INV-{d:%y%m}-{_bump(conn, 'inv-' + d.strftime('%y%m')):04d}"
+
+
+def new_unique_code(conn, amount):
+    """Random 1-999, not already used by another open invoice of the same base amount (transfer matching)."""
+    used = {r[0] for r in conn.execute("SELECT unique_code FROM payments WHERE amount_idr=? AND status='pending' "
+                                       "AND unique_code IS NOT NULL", (amount,))}
+    return secrets.choice([c for c in range(1, 1000) if c not in used] or [1])
+
+
+def due_iso(start=None):
+    return ((start or datetime.now(timezone.utc)) + timedelta(hours=PAY_HOURS)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def audit(conn, staff_id, action, detail=""):

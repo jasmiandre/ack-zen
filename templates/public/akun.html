@@ -6,9 +6,58 @@
 {% if http_warning %}<p class="notice warn" role="alert">Sesi berjalan lewat HTTP tanpa enkripsi. Hanya untuk data dummy.</p>{% endif %}
 <header class="bar"><a href="/" class="back">&larr; Beranda</a>
 <form method="post" action="/akun/keluar"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="btn ghost">Keluar</button></form></header>
-<main id="utama"><h1>Pendaftaran diterima</h1>
-<p class="lead">Terima kasih, {{ m.full_name }}. Kode member kamu: <strong>{{ m.code }}</strong>.</p>
-<dl class="kv"><dt>Status</dt><dd>Menunggu verifikasi tim ACK{% if m.perlu_review %} (perlu review tambahan){% endif %}</dd>
-{% if sub %}<dt>Program</dt><dd>{{ sub.name }} — langganan menunggu ({{ price(sub.price_idr) }})</dd>{% endif %}</dl>
-<p>Belum ada pembayaran yang diminta. Tim akan menghubungi setelah dokumen diperiksa. Fitur portal lengkap hadir di tahap berikutnya.</p>
+<main id="utama"><h1>Halo, {{ m.full_name }}</h1>
+<p class="lead">Kode member: <strong>{{ m.code }}</strong>{% if sub %} · Program: {{ sub.name }}{% endif %}</p>
+{% if error %}<p class="err banner-err" role="alert">{{ error }}</p>{% endif %}
+
+<section aria-labelledby="h-status"><h2 id="h-status">Status saya</h2>
+<ol class="tl">{% for name, st in steps %}<li class="{{ st }}"{% if st == 'current' %} aria-current="step"{% endif %}><span class="dot" aria-hidden="true">{% if st == 'done' %}✓{% else %}{{ loop.index }}{% endif %}</span><span>{{ name }}<small>{{ {'done':'selesai','current':'sedang berjalan','todo':'belum'}[st] }}</small></span></li>{% endfor %}</ol>
+{% if m.perlu_review %}<p class="hint">Data kamu sedang ditinjau tambahan oleh tim.</p>{% endif %}</section>
+
+<section aria-labelledby="h-bayar"><h2 id="h-bayar">Tagihan &amp; pembayaran</h2>
+{% if not pay %}<p>Info harga via admin.{% if sub and sub.price_idr is not none %} Harga {{ sub.name }}: {{ price(sub.price_idr) }}.{% endif %} Belum ada tagihan; tim akan menghubungi kamu.{% if wa %} <a href="https://wa.me/{{ wa }}">Hubungi admin via WhatsApp</a>.{% endif %}</p>
+{% else %}<p><span class="badge {{ pstate }}">{{ pay_label[pstate] }}</span> · No. tagihan {{ pay.invoice_code }}</p>
+{% if pay.reject_reason %}<p class="err banner-err">Alasan ditolak: {{ pay.reject_reason }}</p>{% endif %}
+<dl class="kv"><dt>Nominal transfer</dt><dd><strong>{{ rp(total) }}</strong>{% if pay.unique_code %} <span class="hint">(termasuk kode unik {{ '%03d' % pay.unique_code }}; transfer tepat sampai digit terakhir)</span>{% endif %}</dd>
+{% if pay.due_at %}<dt>Batas waktu</dt><dd>{{ pay.due_at[:16]|replace('T',' ') }} UTC{% if overdue %} — <strong>sudah lewat</strong>, hubungi admin{% endif %}</dd>{% endif %}
+<dt>Rekening</dt><dd>{% if bank %}{% for l in bank %}{{ l }}{% if not loop.last %}<br>{% endif %}{% endfor %}{% else %}Info rekening belum diatur — hubungi admin.{% endif %}</dd></dl>
+{% if pstate != 'approved' %}<form method="post" action="/akun/bayar/unggah" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf }}">
+<label for="proof">{% if pay.proof_file_id %}Ganti bukti transfer{% else %}Unggah bukti transfer{% endif %} (JPG/PNG/WEBP, maks 10 MB)</label><input id="proof" name="proof" type="file" accept="image/jpeg,image/png,image/webp" required>
+<div class="nav"><button class="btn">Kirim bukti</button></div></form>{% endif %}{% endif %}</section>
+
+<section aria-labelledby="h-ver"><h2 id="h-ver">Verifikasi</h2>
+{% for k, (label, slots) in vkind.items() %}<div class="vrow"><p><strong>{{ label }}</strong>: <span class="badge {{ vstate[k] }}">{{ ver_label[vstate[k]] }}</span></p>
+{% if vstate[k] == 'rejected' %}<p class="err banner-err">Alasan: {{ vers[k].note or 'Tidak ada catatan.' }}</p>
+<form method="post" action="/akun/verifikasi/unggah" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ k }}">
+{% for sl in slots %}<label for="f-{{ sl }}">{% if sl == 'ktp_redacted' %}KTP yang sudah disensor{% elif sl == 'photo_body' %}Foto seluruh badan{% else %}Foto close up wajah{% endif %}</label><input id="f-{{ sl }}" name="{{ sl }}" type="file" accept="image/jpeg,image/png,image/webp" required>{% endfor %}
+<div class="nav"><button class="btn">Unggah ulang</button></div></form>{% endif %}</div>{% endfor %}</section>
+
+<section aria-labelledby="h-kenal"><h2 id="h-kenal">Perkenalan</h2>
+{% if not cards %}<p>Belum ada kandidat. Matchmaker kami akan mengusulkan setelah akunmu aktif.</p>{% endif %}
+{% for c in cards if c.status != 'declined' or c.mine != 'tidak' %}{% if c.status != 'declined' or c.mine == 'tertarik' %}
+<article class="card">{% if c.status != 'declined' %}<img src="/akun/foto/{{ c.id }}" alt="Foto close up kandidat" width="160" height="160" loading="lazy">{% else %}<span></span>{% endif %}
+<div><p><strong>{{ c.age }} tahun</strong> · {{ c.domicile }} · {{ c.education }}</p><p>{{ c.intro }}</p>
+{% if c.reason %}<p><strong>Kenapa cocok:</strong> {{ c.reason }}</p>{% endif %}
+{% if c.mutual %}<p class="badge approved">Saling tertarik</p><p>Kontak: {{ c.contact.name }} — <a href="https://wa.me/{{ c.contact.phone }}">{{ c.contact.phone }}</a></p>
+{% elif c.mine %}<p class="hint">Jawabanmu tersimpan. Menunggu pihak lain.</p>
+{% else %}<form method="post" action="/akun/perkenalan/{{ c.id }}/respon" class="nav"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="btn" name="choice" value="tertarik">Tertarik</button><button class="btn ghost" name="choice" value="tidak">Tidak</button></form>{% endif %}
+{% if c.mutual and c.slots %}<h3>Jadwal dinner</h3>{% if c.picked %}<p>Terpilih: {{ c.picked.starts_at }} — {{ c.picked.venue }}</p>{% elif c.pick %}
+<form method="post" action="/akun/perkenalan/{{ c.id }}/slot"><input type="hidden" name="csrf_token" value="{{ csrf }}"><fieldset class="checks"><legend>Pilih satu slot</legend>
+{% for sl in c.slots %}<label class="chk"><input type="radio" name="slot_id" value="{{ sl.id }}" required> {{ sl.starts_at }} — {{ sl.venue }}</label>{% endfor %}</fieldset><div class="nav"><button class="btn">Pilih jadwal</button></div></form>{% endif %}{% endif %}
+{% if c.mutual and not c.feedback_done %}<h3>Feedback setelah bertemu</h3><p class="hint">Hanya dibaca tim ACK, tidak dibagikan ke pihak lain.</p>
+<form method="post" action="/akun/perkenalan/{{ c.id }}/feedback"><input type="hidden" name="csrf_token" value="{{ csrf }}">
+<label for="r{{ c.id }}">Rating</label><select id="r{{ c.id }}" name="rating" required><option value="">Pilih 1-5</option>{% for i in range(1,6) %}<option>{{ i }}</option>{% endfor %}</select>
+<label for="n{{ c.id }}">Catatan (opsional)</label><textarea id="n{{ c.id }}" name="note" rows="3" maxlength="1000"></textarea>
+<div class="nav"><button class="btn">Kirim feedback</button></div></form>{% elif c.mutual %}<p class="hint">Feedback terkirim, terima kasih.</p>{% endif %}
+</div></article>{% endif %}{% endfor %}</section>
+
+<section aria-labelledby="h-akun"><h2 id="h-akun">Pengaturan akun</h2>
+<p><a class="btn ghost" href="/akun/profil">Edit profil</a></p>
+<h3>Hapus akun &amp; data</h3>
+{% if deletion %}<p class="badge check">Permintaan hapus diterima — sedang diproses Owner.</p>{% else %}
+<form method="post" action="/akun/hapus"><input type="hidden" name="csrf_token" value="{{ csrf }}">
+<p class="hint">Ini hanya mengirim permintaan; Owner yang memprosesnya.</p>
+<label class="chk"><input type="checkbox" name="confirm" required> Saya minta akun dan data saya dihapus.</label>
+<label for="dpw">Password</label><input id="dpw" name="password" type="password" required maxlength="256" autocomplete="current-password">
+<div class="nav"><button class="btn ghost">Kirim permintaan hapus</button></div></form>{% endif %}</section>
 </main></body></html>

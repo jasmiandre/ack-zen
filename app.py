@@ -13,6 +13,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 import auth
 import landing
 import db
+import portal
 import register
 from register import BodyLimit
 import seed
@@ -22,7 +23,7 @@ USER_RE = re.compile(r"[a-z0-9._-]{3,32}")
 AREAS = tuple(r for r in db.ROLES if r != "owner")
 
 
-def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=None):
+def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=None, bank_info=None, wa_admin=None):
     env = seed.read_env(seed.ENV_PATH)
     db_path = db_path or seed.DB_PATH
     secret_key = secret_key or env.get("SECRET_KEY") or ""
@@ -50,8 +51,11 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
     for sub in ("css", "js", "fonts", "img"):
         app.mount(f"/static/{sub}", StaticFiles(directory=os.path.join(HERE, "static", sub)), name=f"static-{sub}")
 
-    register.mount(app, conn, jenv, secret_key, cookie_secure, fernet_key,
-                   os.path.join(os.path.dirname(os.path.abspath(db_path)), "private"))
+    priv = os.path.join(os.path.dirname(os.path.abspath(db_path)), "private")
+    fernet = register.mount(app, conn, jenv, secret_key, cookie_secure, fernet_key, priv)
+    portal.mount(app, conn, jenv, secret_key, cookie_secure, fernet, priv,
+                 env.get("BANK_INFO", "") if bank_info is None else bank_info,
+                 env.get("WA_ADMIN", "") if wa_admin is None else wa_admin)
 
     def page(request, name, status=200, sess=None, **ctx):
         html = jenv.get_template(name).render(
@@ -83,7 +87,7 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
         if request.url.path == "/":  # public landing: pinned CDN allow-list; staff pages keep the tight CSP
             resp.headers["Cache-Control"] = "no-cache"
             resp.headers["Content-Security-Policy"] = landing.PUBLIC_CSP
-        elif request.url.path in ("/daftar", "/akun/masuk", "/akun"):  # self-hosted JS/CSS only; blob: preview of redacted KTP
+        elif request.url.path in ("/daftar", "/akun/masuk") or request.url.path.startswith("/akun") and not request.url.path.startswith("/akun/foto/"):  # self-hosted JS/CSS only; blob: preview of redacted KTP
             resp.headers["Cache-Control"] = "no-store"
             resp.headers["Content-Security-Policy"] = ("default-src 'none'; script-src 'self'; style-src 'self'; "
                 "font-src 'self'; img-src 'self' blob: data:; connect-src 'self'; form-action 'self'; "
@@ -273,4 +277,6 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
 
     # raw ASGI wrapper: cap is enforced on received bytes before multipart parsing
     app.add_middleware(BodyLimit, path="/daftar/submit", limit=register.BODY_LIMIT)
+    for up in ("/akun/bayar/unggah", "/akun/verifikasi/unggah"):
+        app.add_middleware(BodyLimit, path=up, limit=register.BODY_LIMIT)
     return app

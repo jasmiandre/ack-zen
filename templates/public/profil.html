@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Edit profil — Aku Cari Kamu</title><meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="/static/css/daftar.css"></head>
+<body class="reg"><p class="notice" role="note"><strong>DATA DUMMY — prototipe demo.</strong></p>
+{% if http_warning %}<p class="notice warn" role="alert">Sesi berjalan lewat HTTP tanpa enkripsi. Hanya untuk data dummy.</p>{% endif %}
+<header class="bar"><a href="/akun" class="back">&larr; Kembali</a></header>
+<main id="utama"><h1>Edit profil</h1>
+<p class="lead">Nama, tanggal lahir, gender, HP, dan email tidak bisa diubah di sini (hubungi admin). Mengubah suku, agama, atau status akan masuk tinjauan ulang tim.</p>
+<form method="post" action="/akun/profil" novalidate><input type="hidden" name="csrf_token" value="{{ csrf }}">
+<label for="domicile">Domisili</label><input id="domicile" name="domicile" type="text" value="{{ v.domicile if v.domicile is not none else '' }}" required maxlength="100">{% if errors.domicile %}<p class="err">{{ errors.domicile }}</p>{% endif %}
+<label for="marga">Marga (opsional)</label><input id="marga" name="marga" type="text" value="{{ v.marga if v.marga is not none else '' }}" maxlength="60">{% if errors.marga %}<p class="err">{{ errors.marga }}</p>{% endif %}
+<label for="ethnicity">Suku</label><select id="ethnicity" name="ethnicity" required>{% for x in o.ethnicity %}<option{% if x == v.ethnicity %} selected{% endif %}>{{ x }}</option>{% endfor %}</select>{% if errors.ethnicity %}<p class="err">{{ errors.ethnicity }}</p>{% endif %}
+<label for="religion">Agama</label><select id="religion" name="religion" required>{% for x in o.religion %}<option{% if x == v.religion %} selected{% endif %}>{{ x }}</option>{% endfor %}</select>{% if errors.religion %}<p class="err">{{ errors.religion }}</p>{% endif %}
+<label for="marital_status">Status</label><select id="marital_status" name="marital_status" required>{% for x in o.marital %}<option{% if x == v.marital_status %} selected{% endif %}>{{ x }}</option>{% endfor %}</select>{% if errors.marital_status %}<p class="err">{{ errors.marital_status }}</p>{% endif %}
+<label for="education">Pendidikan</label><select id="education" name="education" required>{% for x in o.education %}<option{% if x == v.education %} selected{% endif %}>{{ x }}</option>{% endfor %}</select>{% if errors.education %}<p class="err">{{ errors.education }}</p>{% endif %}
+<label for="height_cm">Tinggi badan (cm)</label><input id="height_cm" name="height_cm" type="number" value="{{ v.height_cm if v.height_cm is not none else '' }}" required min="100" max="250">{% if errors.height_cm %}<p class="err">{{ errors.height_cm }}</p>{% endif %}
+<label for="intro">Perkenalan diri</label><textarea id="intro" name="intro" rows="5" required minlength="30" maxlength="2000">{{ v.intro or '' }}</textarea>{% if errors.intro %}<p class="err">{{ errors.intro }}</p>{% endif %}
+<label for="pref_age_min">Usia pasangan min</label><input id="pref_age_min" name="pref_age_min" type="number" value="{{ v.pref_age_min if v.pref_age_min is not none else '' }}" required min="18" max="100">{% if errors.pref_age_min %}<p class="err">{{ errors.pref_age_min }}</p>{% endif %}
+<label for="pref_age_max">Usia pasangan maks</label><input id="pref_age_max" name="pref_age_max" type="number" value="{{ v.pref_age_max if v.pref_age_max is not none else '' }}" required min="18" max="100">{% if errors.pref_age_max %}<p class="err">{{ errors.pref_age_max }}</p>{% endif %}
+<label for="pref_religion">Agama pasangan</label><select id="pref_religion" name="pref_religion" required>{% for x in o.pref_religion %}<option{% if x == v.pref_religion %} selected{% endif %}>{{ x }}</option>{% endfor %}</select>{% if errors.pref_religion %}<p class="err">{{ errors.pref_religion }}</p>{% endif %}
+<label for="pref_domicile">Domisili pasangan</label><input id="pref_domicile" name="pref_domicile" type="text" value="{{ v.pref_domicile if v.pref_domicile is not none else '' }}" required maxlength="100">{% if errors.pref_domicile %}<p class="err">{{ errors.pref_domicile }}</p>{% endif %}
+<label for="pref_notes">Catatan preferensi</label><textarea id="pref_notes" name="pref_notes" rows="3" maxlength="500">{{ v.pref_notes or '' }}</textarea>
+<label for="publish_consent">Izin publikasi profil</label><select id="publish_consent" name="publish_consent" required>{% for k, lbl in o.publish.items() %}<option value="{{ k }}"{% if k == v.publish_consent %} selected{% endif %}>{{ lbl }}</option>{% endfor %}</select>{% if errors.publish_consent %}<p class="err">{{ errors.publish_consent }}</p>{% endif %}
+<div class="nav"><button class="btn">Simpan</button><a class="btn ghost" href="/akun">Batal</a></div></form></main></body></html>

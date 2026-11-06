@@ -50,3 +50,20 @@ summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-weig
 @media(max-width:480px){.row{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){#bar{transition:none}}
 .tools{display:flex;gap:.75rem;flex-wrap:wrap;margin:1rem 0}
+
+/* Stage 3 portal */
+.tl{list-style:none;margin:1rem 0;padding:0;display:grid;gap:.5rem}
+.tl li{display:flex;align-items:center;gap:.75rem;min-height:44px}
+.tl small{display:block;font-size:.9375rem;color:#5b4545}
+.tl .dot{flex:none;width:2.25rem;height:2.25rem;border-radius:50%;display:grid;place-items:center;font-weight:700;border:2px solid var(--rose);background:#fff;color:var(--wine)}
+.tl .done .dot{background:var(--wine);color:var(--champ);border-color:var(--wine)}
+.tl .current .dot{border:3px solid var(--wine);box-shadow:0 0 0 4px var(--champ)}
+.tl .todo{opacity:1;color:#5b4545}
+@media(min-width:42rem){.tl{grid-template-columns:repeat(5,1fr)}.tl li{flex-direction:column;text-align:center;align-items:center}}
+main section{margin:1.5rem 0;padding:1rem 1.25rem;background:#fff;border:1px solid #e3d3bf;border-radius:.75rem}
+.badge{display:inline-block;padding:.15rem .7rem;border-radius:99px;font-weight:600;background:#efe3d2;color:var(--wine)}
+.badge.approved{background:#dff0e0;color:#14501f}.badge.rejected{background:#fde8eb;color:var(--err)}
+.card{display:grid;grid-template-columns:auto 1fr;gap:1rem;padding:1rem 0;border-top:1px solid #e3d3bf}
+.card img{width:160px;height:160px;object-fit:cover;border-radius:.6rem;background:#e3d3bf}
+@media(max-width:36rem){.card{grid-template-columns:1fr}}
+textarea,select,input[type=file]{font:inherit;width:100%;min-height:44px}
