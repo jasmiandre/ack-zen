@@ -349,6 +349,7 @@
   },
   "whatsapp": {
     "button": "Channel WhatsApp",
+    "aria": "WhatsApp channel ACK",
     "url": "https://whatsapp.com/channel/0029Vb98jsT5vK9ziES81z20"
   },
   "footer": {

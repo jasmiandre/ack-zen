@@ -290,9 +290,9 @@ class Rev2(Base):
         wa = [l for l in self.css().splitlines() if l.startswith(".wa{")][0]
         self.assertIn("var(--champ)", wa)
         self.assertNotIn("#0f3d2e", self.css())
-        self.assertIn('class="wa" href="https://whatsapp.com/channel/0029Vb98jsT5vK9ziES81z20"', self.html)
-        self.assertRegex(self.css(), r"\.wa\{left:0;right:0;bottom:0")  # mobile: docked bar + body padding, no occlusion
-        self.assertIn("padding-bottom:52px", self.css())
+        self.assertIn('class="wa" aria-label="WhatsApp channel ACK" href="https://whatsapp.com/channel/0029Vb98jsT5vK9ziES81z20"', self.html)
+        self.assertRegex(self.css(), r"\.wa\{position:fixed;right:1rem;bottom:1rem;left:auto;width:54px;height:54px;[^}]*border-radius:50%")  # mobile: round bubble, not full-width bar
+        self.assertNotIn("padding-bottom:52px", self.css())
 
     def test_r9_no_aku_kamu_kita_filler(self):
         self.assertNotIn('class="stages"', self.html)

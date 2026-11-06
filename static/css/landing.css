@@ -225,10 +225,10 @@ dialog .btn-primary{background:var(--wine);color:var(--cream)}
 @media(min-width:900px){.nav-cta{display:inline-flex}}
 @media(max-width:899px){
  .hero{height:auto}
- .hero-pin{position:relative;height:auto;min-height:0;display:flex;flex-direction:column;padding:5.5rem 1.25rem 2rem}
- .hero-art{position:relative;inset:auto;width:100%;height:clamp(140px,38vw,190px);flex:none;margin-bottom:.75rem}
- .hero-svg,.hero-gl{width:clamp(140px,38vw,190px)}
+ .hero-pin{position:relative;height:auto;min-height:0;display:flex;flex-direction:column;padding:4.75rem 1.25rem 2rem}
+ .hero-art{position:relative;inset:auto;width:100%;height:clamp(110px,30vw,130px);flex:none;margin-bottom:.5rem}
+ .hero-svg,.hero-gl{width:clamp(110px,30vw,130px)}
  .hero-copy{align-self:flex-start}
- .wa{left:0;right:0;bottom:0;border-radius:0;justify-content:center;min-height:52px;border-width:1px 0 0}
- body.lp{padding-bottom:52px}
+ .wa{position:fixed;right:1rem;bottom:1rem;left:auto;width:54px;height:54px;min-height:52px;margin:0;padding:0;justify-content:center;border-radius:50%}
+ .wa span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 }

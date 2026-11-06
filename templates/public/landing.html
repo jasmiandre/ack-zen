@@ -201,7 +201,7 @@
   </p>
 </footer>
 
-<a class="wa" href="{{ c.whatsapp.url }}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M4 20l1.3-4.2A8 8 0 1 1 8.4 18.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.5 8.5c.3 2.6 2.9 5.2 5.5 5.5l1.3-1.3-1.8-1-.9.7c-.8-.4-1.7-1.3-2.1-2.1l.7-.9-1-1.8z" fill="currentColor"/></svg><span>{{ c.whatsapp.button }}</span></a>
+<a class="wa" aria-label="{{ c.whatsapp.aria }}" href="{{ c.whatsapp.url }}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M4 20l1.3-4.2A8 8 0 1 1 8.4 18.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.5 8.5c.3 2.6 2.9 5.2 5.5 5.5l1.3-1.3-1.8-1-.9.7c-.8-.4-1.7-1.3-2.1-2.1l.7-.9-1-1.8z" fill="currentColor"/></svg><span>{{ c.whatsapp.button }}</span></a>
 
 {% macro dlg(id, title, paras) %}
 <dialog id="{{ id }}" aria-labelledby="{{ id }}-t">
