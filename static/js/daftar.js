@@ -6,7 +6,65 @@
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var form = $("#reg"), steps = $$(".step"), cur = 1, KEY = "ack_reg_draft_v1";
   var SKIP = { password: 1, password2: 1, csrf_token: 1, ktp_nik_ok: 1, ktp_addr_ok: 1, ktp_sign_ok: 1 };
-  var MAXB = 10 * 1024 * 1024, MAXSIDE = 1600;
+  var MAXB = 10 * 1024 * 1024, MAXSIDE = 1600, QUALITY = 0.85, TARGET = 999999 /* strict: browser output must be < 1,000,000 bytes */, MINSIDE = 500;
+  var photos = { photo_face: null, photo_body: null }; /* compressed JPEG blobs; the raw picker files are never sent */
+  var HEIC_MSG = "Browser ini tidak bisa membaca HEIC/HEIF. Ekspor foto sebagai JPG, PNG, atau WEBP (iPhone: Pengaturan > Kamera > Format > Paling Kompatibel, atau bagikan sebagai JPEG), lalu pilih lagi.";
+  function isHeic(f) { return /\.(heic|heif)$/i.test(f.name) || /^image\/hei[cf]/i.test(f.type); }
+
+  /* ---------- image decode + compress (browser only) ---------- */
+  /* Native decode first for every file regardless of extension/MIME (Safari decodes HEIC); no decoder library. */
+  function decode(file) {
+    var fail = function () { throw new Error(isHeic(file) ? HEIC_MSG : "File bukan gambar yang valid."); };
+    if (window.createImageBitmap) return createImageBitmap(file).catch(function () { return viaImg(file); }).catch(fail);
+    return viaImg(file).catch(fail);
+  }
+  function viaImg(file) {
+    return new Promise(function (ok, no) {
+      var u = URL.createObjectURL(file), im = new Image();
+      im.onload = function () { URL.revokeObjectURL(u); ok({ width: im.naturalWidth, height: im.naturalHeight, close: function () {}, src: im }); };
+      im.onerror = function () { URL.revokeObjectURL(u); no(new Error("decode")); };
+      im.src = u;
+    });
+  }
+  function drawable(d) { return d.src || d; }
+  function fitSize(w, h, side) { var k = Math.min(1, side / Math.max(w, h)); return [Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k))]; }
+  function toJpeg(c) { return new Promise(function (ok, no) { c.toBlob(function (b) { b ? ok(b) : no(new Error("Gagal mengompres gambar.")); }, "image/jpeg", QUALITY); }); }
+  /* Longest side <=1600, JPEG q.85. If still >=1,000,000 B, shrink dimensions (quality stays .85) until it fits; below MINSIDE -> reject (never send oversize). */
+  function compress(src, w, h) {
+    var side = MAXSIDE, n = 0;
+    function attempt() {
+      var sz = fitSize(w, h, side), c = document.createElement("canvas"), x;
+      c.width = sz[0]; c.height = sz[1]; x = c.getContext("2d");
+      x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); /* JPEG has no alpha */
+      x.drawImage(src, 0, 0, c.width, c.height);
+      return toJpeg(c).then(function (b) {
+        n++;
+        var m = Math.max(c.width, c.height);
+        if (b.size <= TARGET) return { blob: b, w: c.width, h: c.height, tries: n };
+        if (m <= MINSIDE) throw new Error("Foto tidak bisa dikompres di bawah 1 MB tanpa merusak keterbacaan; pilih foto lain.");
+        side = Math.min(m - 1, Math.max(MINSIDE, Math.floor(m * Math.sqrt(TARGET / b.size) * 0.95)));
+        return attempt();
+      });
+    }
+    return attempt();
+  }
+  function note(k, t) { var p = $("[data-note=" + k + "]"); if (p) p.textContent = t; }
+  function prep(k, file) {
+    photos[k] = null; clearErr(steps[3]); note(k, "");
+    if (!file) return;
+    if (file.size > MAXB) { showErr(k, "Maksimal 10 MB."); return; }
+    note(k, "Memproses foto…");
+    decode(file).then(function (d) {
+      if (form[k].files[0] !== file) { if (d.close) d.close(); return; }
+      return compress(drawable(d), d.width, d.height).then(function (r) {
+        if (d.close) d.close();
+        if (form[k].files[0] !== file) return;
+        photos[k] = r.blob;
+        note(k, "Siap: " + r.w + "×" + r.h + ", " + Math.round(r.blob.size / 1024) + " KB (JPEG 85%" + (r.tries > 1 ? ", dimensi diperkecil" : "") + ")");
+      });
+    }).catch(function (e) { if (form[k].files[0] === file) { note(k, ""); showErr(k, e.message); } });
+  }
+  [ "photo_face", "photo_body" ].forEach(function (k) { form[k].addEventListener("change", function (e) { prep(k, e.target.files[0]); }); });
 
   /* ---------- draft ---------- */
   function saveDraft() {
@@ -71,7 +129,7 @@
         var f = form[k].files[0];
         if (!f) fail(k, "Pilih file foto.");
         else if (f.size > MAXB) fail(k, "Maksimal 10 MB.");
-        else if (!/^image\/(jpeg|png|webp)$/.test(f.type)) fail(k, "Hanya JPG, PNG, atau WEBP.");
+        else if (!photos[k]) fail(k, "Foto belum selesai diproses atau tidak valid; pilih ulang.");
       });
     }
     if (n === 5) {
@@ -100,7 +158,7 @@
   $("#intro").addEventListener("input", function () { $("#intro-n").textContent = $("#intro").value.trim().length; });
 
   /* ---------- KTP redaction canvas ---------- */
-  var cv = $("#ktp-canvas"), ctx = cv.getContext("2d"), img = null, boxes = [], sel = -1, drag = null, redacted = null, prevURL = null, srcURL = null;
+  var cv = $("#ktp-canvas"), ctx = cv.getContext("2d"), img = null, boxes = [], sel = -1, drag = null, redacted = null, prevURL = null;
   var HANDLE = 22; /* px, display space: >=44px hit area is provided by the 22px grip + padding below */
   function scale() { return cv.width / cv.clientWidth || 1; }
   function draw() {
@@ -117,20 +175,18 @@
   function load(file) {
     redacted = null; $("#prev-wrap").hidden = true; setChecks(false);
     if (!file) { $("#ktp-tools").hidden = true; return; }
-    if (file.size > MAXB) { showErr("ktp_redacted", "Maksimal 10 MB."); return; }
-    if (srcURL) URL.revokeObjectURL(srcURL);
-    srcURL = URL.createObjectURL(file);
-    var im = new Image();
-    im.onload = function () {
-      var k = Math.min(1, MAXSIDE / Math.max(im.naturalWidth, im.naturalHeight));
-      img = im; cv.width = Math.round(im.naturalWidth * k); cv.height = Math.round(im.naturalHeight * k);
+    if (file.size > MAXB) { $("#ktp-tools").hidden = true; showErr("ktp_redacted", "Maksimal 10 MB."); return; }
+    clearErr(steps[3]);
+    decode(file).then(function (d) {
+      if ($("#ktp-src").files[0] !== file) return;
+      var sz = fitSize(d.width, d.height, MAXSIDE), w0 = document.createElement("canvas"); /* working copy <=1600 */
+      w0.width = sz[0]; w0.height = sz[1]; w0.getContext("2d").drawImage(drawable(d), 0, 0, sz[0], sz[1]); if (d.close) d.close();
+      img = w0; cv.width = sz[0]; cv.height = sz[1];
       var w = cv.width, h = cv.height;
       boxes = [{ label: "NIK", x: w * .3, y: h * .2, w: w * .4, h: h * .1 }, { label: "Alamat", x: w * .05, y: h * .55, w: w * .5, h: h * .2 },
                { label: "Tanda tangan", x: w * .6, y: h * .72, w: w * .3, h: h * .18 }];
-      sel = 0; $("#ktp-tools").hidden = false; clearErr(steps[3]); draw();
-    };
-    im.onerror = function () { showErr("ktp_redacted", "File bukan gambar yang valid."); $("#ktp-tools").hidden = true; };
-    im.src = srcURL;
+      sel = 0; $("#ktp-tools").hidden = false; draw();
+    }).catch(function (e) { $("#ktp-tools").hidden = true; showErr("ktp_redacted", e.message); });
   }
   $("#ktp-src").addEventListener("change", function (e) { load(e.target.files[0]); });
   function pt(e) { var r = cv.getBoundingClientRect(), s = scale(); return { x: (e.clientX - r.left) * s, y: (e.clientY - r.top) * s }; }
@@ -177,12 +233,13 @@
     if (!img) return;
     var o = document.createElement("canvas"); o.width = cv.width; o.height = cv.height;
     var c = o.getContext("2d"); c.drawImage(img, 0, 0, o.width, o.height);
-    c.fillStyle = "#000"; boxes.forEach(function (b) { c.fillRect(b.x, b.y, b.w, b.h); });
-    o.toBlob(function (blob) {
-      if (!blob) { showErr("ktp_redacted", "Gagal membuat pratinjau."); return; }
-      redacted = blob; if (prevURL) URL.revokeObjectURL(prevURL);
+    c.fillStyle = "#000"; boxes.forEach(function (b) { c.fillRect(b.x, b.y, b.w, b.h); }); /* flatten first; only then lossy export/resize */
+    $("#make-prev").disabled = true;
+    compress(o, o.width, o.height).then(function (r) {
+      $("#make-prev").disabled = false;
+      var blob = r.blob; redacted = blob; if (prevURL) URL.revokeObjectURL(prevURL);
       prevURL = URL.createObjectURL(blob); $("#ktp-prev").src = prevURL; $("#prev-wrap").hidden = false; setChecks(true); clearErr(steps[3]);
-    }, "image/jpeg", 0.9);
+    }).catch(function (e) { $("#make-prev").disabled = false; showErr("ktp_redacted", e && e.message || "Gagal membuat pratinjau."); });
   });
 
   /* ---------- submit: build FormData by hand so the original KTP can never ride along ---------- */
@@ -196,17 +253,27 @@
       else fd.append(el.name, el.value);
     });
     fd.append("ktp_redacted", redacted, "ktp-redacted.jpg");
-    fd.append("photo_face", form.photo_face.files[0]); fd.append("photo_body", form.photo_body.files[0]);
-    var btn = $("#send"); btn.disabled = true; btn.textContent = "Mengirim…"; clearErr();
-    fetch("/daftar/submit", { method: "POST", body: fd, headers: { "X-CSRF-Token": form.csrf_token.value }, credentials: "same-origin" })
-      .then(function (r) { return r.json().catch(function () { return { ok: false, error: "Respons server tidak valid." }; }); })
-      .then(function (j) {
-        if (j.ok) { clearDraft(); location.href = j.redirect; return; }
-        btn.disabled = false; btn.textContent = "Kirim pendaftaran";
-        if (j.errors) { Object.keys(j.errors).forEach(function (k) { showErr(k, j.errors[k]); }); go(j.step || 1); }
-        else $("#formerr").textContent = j.error || "Gagal mengirim.";
-      })
-      .catch(function () { btn.disabled = false; btn.textContent = "Kirim pendaftaran"; $("#formerr").textContent = "Koneksi gagal. Coba lagi."; });
+    fd.append("photo_face", photos.photo_face, "face.jpg"); fd.append("photo_body", photos.photo_body, "body.jpg");
+    var btn = $("#send"), pg = $("#up-progress"), st = $("#up-status"), done = false;
+    function reset(msg) { btn.disabled = false; btn.textContent = "Kirim pendaftaran"; pg.hidden = true; if (msg) $("#formerr").textContent = msg; }
+    btn.disabled = true; btn.textContent = "Mengirim…"; clearErr(); pg.hidden = false; pg.removeAttribute("value"); st.textContent = "Menyiapkan pengiriman…";
+    var x = new XMLHttpRequest();
+    x.open("POST", "/daftar/submit"); x.withCredentials = true; x.setRequestHeader("X-CSRF-Token", form.csrf_token.value);
+    x.upload.addEventListener("progress", function (ev) {
+      if (!ev.lengthComputable) return;
+      var p = Math.floor(ev.loaded / ev.total * 100); pg.max = 100; pg.value = p; st.textContent = "Mengunggah " + p + "%";
+    });
+    x.upload.addEventListener("load", function () { pg.value = 100; st.textContent = "Terkirim 100%. Server sedang menyimpan pendaftaran…"; });
+    x.addEventListener("load", function () {
+      var j; try { j = JSON.parse(x.responseText); } catch (e) { j = { ok: false, error: "Respons server tidak valid" + (x.status === 413 ? " (file terlalu besar, 413)." : " (" + x.status + ").") }; }
+      if (j.ok) { done = true; clearDraft(); location.href = j.redirect; return; }
+      reset(); st.textContent = "";
+      if (j.errors) { Object.keys(j.errors).forEach(function (k) { showErr(k, j.errors[k]); }); go(j.step || 1); }
+      else $("#formerr").textContent = j.error || "Gagal mengirim.";
+    });
+    x.addEventListener("error", function () { reset("Koneksi gagal. Coba lagi."); st.textContent = ""; });
+    x.addEventListener("abort", function () { reset("Pengiriman dibatalkan."); st.textContent = ""; });
+    x.send(fd); /* single attempt: no automatic retry, so no double create */
   });
 
   loadDraft(); go(cur);

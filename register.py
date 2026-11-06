@@ -126,10 +126,28 @@ def validate(f, today=None):
     return c, e, (min(STEP_OF[k] for k in e) if e else 0)
 
 
-def clean_image(raw):
+HEIC_MSG = ("Format HEIC/HEIF belum didukung. Ekspor foto sebagai JPG, PNG, atau WEBP "
+            "(iPhone: Pengaturan > Kamera > Format > Paling Kompatibel, atau bagikan/ekspor sebagai JPEG), lalu unggah lagi.")
+HEIC_BRANDS = (b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"hevm", b"hevs", b"mif1", b"msf1")
+
+
+class UnsupportedFormat(ValueError):
+    pass
+
+
+def is_heic(raw, filename="", ctype=""):
+    """HEIC/HEIF by ISO-BMFF magic, extension or MIME; no decoder is needed just to say no."""
+    return ((raw[4:8] == b"ftyp" and raw[8:12] in HEIC_BRANDS)
+            or (filename or "").lower().endswith((".heic", ".heif"))
+            or (ctype or "").lower() in ("image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"))
+
+
+def clean_image(raw, filename="", ctype=""):
     """Decode (jpg/png/webp only), apply EXIF orientation, drop all metadata, resize, re-encode as JPEG."""
     if not raw or len(raw) > MAX_IMG:
         raise ValueError("Ukuran file maksimal 10 MB.")
+    if is_heic(raw, filename, ctype):
+        raise UnsupportedFormat(HEIC_MSG)
     try:
         im = Image.open(BytesIO(raw))
         if im.format not in ("JPEG", "PNG", "WEBP"):
@@ -299,18 +317,20 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet_key, priv_dir):
         for k in ups:
             if k not in SLOTS:
                 errors["ktp_redacted"] = "Hanya hasil sensor KTP yang boleh dikirim."  # e.g. an original 'ktp' field
-        imgs = {}
+        imgs, unsupported = {}, False
         for slot in SLOTS:
             up = ups.get(slot)
             if up is None:
                 errors[slot] = "File wajib diunggah."
                 continue
             try:
-                imgs[slot] = clean_image(await up.read(MAX_IMG + 1))
+                imgs[slot] = clean_image(await up.read(MAX_IMG + 1), up.filename, up.content_type)
+            except UnsupportedFormat as ex:
+                errors[slot], unsupported = str(ex), True
             except ValueError as ex:
                 errors[slot] = str(ex)
         if errors:
-            return err(errors)
+            return err(errors, 415 if unsupported and len(errors) == 1 else 400)
         prog = conn.execute("SELECT id,price_idr FROM programs WHERE id=? AND active=1", (clean["program_id"],)).fetchone()
         if not prog:
             return err({"program_id": "Program tidak tersedia."})

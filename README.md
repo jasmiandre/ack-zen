@@ -163,3 +163,9 @@ Tes: `venv/bin/python -m unittest` (112 tes). Coverage: `venv/bin/coverage run -
 
 ### Pertanyaan terbuka untuk klien
 Teks resmi syarat/privasi (masih DRAF), masa retensi KTP, harga dan durasi program, rekening pembayaran, daftar pilihan agama/pendidikan/sumber final.
+
+### Kompresi foto di browser (Stage 2)
+
+- Foto wajah, badan, dan KTP tersensor (diratakan dulu) diekspor ulang ke JPEG q0.85, sisi terpanjang <=1600 px. Ukuran file hasil harus **< 1.000.000 byte**; jika belum, dimensi diperkecil bertahap. Jika tetap tidak muat (sisi <=500 px), foto **ditolak** dan tidak dikirim.
+- Batas unggah: 10 MiB per file asli; body aplikasi 3x10 MiB + 512 KiB = 31.981.568 B (JSON 413); Nginx  = 33.554.432 B (413 HTML).
+- Format HEIC/HEIF hanya diterima jika browser bisa mendekodekan (Safari); server tetap menolak HEIC mentah. **Safari/HEIC belum diuji** (tidak ada Safari asli di lingkungan uji).

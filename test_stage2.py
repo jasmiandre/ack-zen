@@ -2,6 +2,7 @@
 import asyncio
 import os
 import re
+import contextlib
 import sqlite3
 import tempfile
 import unittest
@@ -112,6 +113,7 @@ class TestRules(unittest.TestCase):
 
     def test_no_override_columns(self):
         conn = db.connect(":memory:")
+        self.addCleanup(conn.close)
         db.init_db(conn)
         cols = {r[1] for r in conn.execute("PRAGMA table_info(members)")}
         self.assertFalse([c for c in cols if "overrid" in c.lower() or "bypass" in c.lower()])
@@ -204,7 +206,8 @@ class TestMigration(unittest.TestCase):
             c.close()
             b = os.path.join(t, "bk.db")
             db.backup(p, b)
-            self.assertEqual(sqlite3.connect(b).execute("SELECT COUNT(*) FROM members").fetchone()[0], 1)
+            with contextlib.closing(sqlite3.connect(b)) as bc:
+                self.assertEqual(bc.execute("SELECT COUNT(*) FROM members").fetchone()[0], 1)
 
 
 class TestRegister(Base):
@@ -228,7 +231,8 @@ class TestRegister(Base):
         self.assertIn("samesite=lax", c.lower())
 
     def test_js_contract_original_never_sent_no_password_draft(self):
-        js = open(os.path.join(HERE, "static", "js", "daftar.js"), encoding="utf-8").read()
+        with open(os.path.join(HERE, "static", "js", "daftar.js"), encoding="utf-8") as fh:
+            js = fh.read()
         self.assertNotIn("new FormData(form", js)
         self.assertNotIn("new FormData(f)", js)
         self.assertIn("ktp_redacted", js)
@@ -262,7 +266,8 @@ class TestRegister(Base):
             p = os.path.join(self.priv, x["stored_path"])
             self.assertEqual(os.stat(p).st_mode & 0o777, 0o600)
             self.assertRegex(x["stored_path"], r"^[0-9a-f]{32}\.(enc|jpg)$")
-            raw = open(p, "rb").read()
+            with open(p, "rb") as fh:
+                raw = fh.read()
             if x["kind"] == "ktp_redacted":
                 self.assertEqual(x["encrypted"], 1)
                 self.assertFalse(raw.startswith(b"\xff\xd8"))
@@ -369,6 +374,57 @@ class TestRegister(Base):
         with self.assertRaises(sqlite3.IntegrityError):
             self.q.execute("INSERT INTO members(code,full_name,birth_date,status,created_at,email_key,phone) "
                            "VALUES('ACK-9999','x','1990-01-01','pending','x','budi.dummy@example.test','62800000001')")
+
+    HEIC = b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00mif1heic" + b"\x00" * 64    # synthetic header only
+
+    def test_heic_clear_415_not_500_nothing_stored(self):
+        for name, data, ct in (("a.heic", self.HEIC, "image/heic"), ("a.jpg", self.HEIC, "image/jpeg"),
+                               ("a.HEIF", img_bytes(), "image/jpeg"), ("a.jpg", img_bytes(), "image/heif")):
+            r = self.submit(fl=files(photo_face=(name, data, ct)))
+            self.assertEqual(r.status_code, 415, (name, ct))
+            self.assertIn("HEIC/HEIF belum didukung", r.json()["errors"]["photo_face"])
+            self.assertIn("JPG, PNG, atau WEBP", r.json()["errors"]["photo_face"])
+        self.assertEqual(self.n("members"), 0)
+
+    def test_heic_mixed_with_other_error_is_400(self):
+        r = self.submit(fl=files(photo_face=("a.heic", self.HEIC, "image/heic"), photo_body=("b.png", b"junk", "image/png")))
+        self.assertEqual(r.status_code, 400)
+
+    def test_heic_js_and_html_guidance(self):
+        js, html = self._src()
+        self.assertIn("HEIC", js)
+        self.assertRegex(js, r"heic\|heif")
+        self.assertRegex(re.search(r'id="photo_face"[^>]*', html).group(0).lower(), r"heic")   # picker allows HEIC
+        self.assertIn("createImageBitmap", js)       # native decode first, no decoder library
+        self.assertIn("HEIC_MSG", js)                # clear export guidance when native decode fails
+
+    def _src(self):
+        out = []
+        for p in (("static", "js", "daftar.js"), ("templates", "public", "daftar.html")):
+            with open(os.path.join(HERE, *p), encoding="utf-8") as fh:
+                out.append(fh.read())
+        return out
+
+    def test_compression_and_progress_contract(self):
+        js, html = self._src()
+        self.assertRegex(js, r"MAXSIDE\s*=\s*1600")
+        self.assertRegex(js, r"QUALITY\s*=\s*0\.85")
+        self.assertRegex(js, r"TARGET\s*=\s*999999")        # strict < 1,000,000 B
+        self.assertNotRegex(js, r"masih >1 MB")      # oversize is rejected, never sent
+        self.assertIn("throw new Error", js)
+        self.assertIn("XMLHttpRequest", js)
+        self.assertIn("upload.addEventListener(\"progress\"", js)
+        self.assertIn("upload.addEventListener(\"load\"", js)
+        self.assertNotIn("fetch(", js)               # progress must be real XHR events, retry-free
+        self.assertNotIn("setInterval", js)          # no fake progress timer
+        self.assertIn("<progress", html)
+        self.assertRegex(html, r'role="status"')
+        self.assertNotRegex(js, r"fd\.append\(\"photo_(face|body)\", form")   # raw picker files never appended
+
+    def test_body_budget_covers_three_max_files(self):
+        self.assertGreaterEqual(register.BODY_LIMIT, 3 * register.MAX_IMG)
+        self.assertEqual(register.BODY_LIMIT, 31_981_568)          # 3*10MiB + 512KiB, below Nginx 32m (33,554,432)
+        self.assertLess(register.BODY_LIMIT, 32 * 1024 * 1024)
 
     def test_bad_images_rejected_and_cleaned(self):
         bad = {"gif": img_bytes("GIF"), "junk": b"hello", "big": b"\0" * (register.MAX_IMG + 1)}

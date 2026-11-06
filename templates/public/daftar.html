@@ -67,8 +67,8 @@
 <fieldset class="step" data-step="4" hidden><legend>4. Verifikasi dokumen</legend>
 <h2>Foto KTP — sensor di browser</h2>
 <p>Pilih foto KTP, lalu geser dan tarik kotak hitam untuk menutupi <strong>NIK</strong>, <strong>alamat</strong>, dan <strong>tanda tangan</strong>. Hanya hasil yang sudah disensor yang dikirim; foto asli tidak pernah meninggalkan browser ini.</p>
-<label for="ktp-src">Foto KTP (JPG/PNG/WEBP, maks {{ max_mb }} MB)</label>
-<input id="ktp-src" type="file" accept="image/jpeg,image/png,image/webp">
+<label for="ktp-src">Foto KTP (JPG/PNG/WEBP, maks {{ max_mb }} MB; HEIC dicoba dibaca browser)</label>
+<input id="ktp-src" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif">
 <p class="err" data-err="ktp_redacted" role="alert"></p>
 <div id="ktp-tools" hidden>
 <div class="stage" id="stage"><canvas id="ktp-canvas" aria-label="Foto KTP dengan kotak sensor"></canvas></div>
@@ -84,10 +84,10 @@
 <p class="err" data-err="ktp_nik_ok ktp_addr_ok ktp_sign_ok" role="alert"></p>
 <h2>Foto diri</h2>
 <p class="hint">Tanpa kacamata hitam atau masker, cahaya terang, tanpa filter berat. Disimpan privat, tidak di folder publik.</p>
-<label for="photo_face">Foto close up wajah</label><input id="photo_face" name="photo_face" type="file" accept="image/jpeg,image/png,image/webp" required>
-<p class="err" data-err="photo_face" role="alert"></p>
-<label for="photo_body">Foto full body</label><input id="photo_body" name="photo_body" type="file" accept="image/jpeg,image/png,image/webp" required>
-<p class="err" data-err="photo_body" role="alert"></p>
+<label for="photo_face">Foto close up wajah (JPG/PNG/WEBP/HEIC; dikompres di browser)</label><input id="photo_face" name="photo_face" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" required>
+<p class="note" data-note="photo_face" role="status"></p><p class="err" data-err="photo_face" role="alert"></p>
+<label for="photo_body">Foto full body (JPG/PNG/WEBP/HEIC; dikompres di browser)</label><input id="photo_body" name="photo_body" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" required>
+<p class="note" data-note="photo_body" role="status"></p><p class="err" data-err="photo_body" role="alert"></p>
 <p class="hint">Hanya JPG, PNG, atau WEBP, maks {{ max_mb }} MB per file. Server mengecilkan ukuran dan menghapus metadata (EXIF).</p>
 </fieldset>
 
@@ -108,7 +108,8 @@
 
 <div class="nav"><button type="button" class="btn ghost" id="prev" hidden>Kembali</button>
 <button type="button" class="btn" id="next">Lanjut</button>
-<button type="submit" class="btn" id="send" hidden>Kirim pendaftaran</button></div>
+<button type="submit" class="btn" id="send" hidden>Kirim pendaftaran</button>
+<progress id="up-progress" max="100" hidden aria-labelledby="up-status"></progress><p id="up-status" role="status" aria-live="polite"></p></div>
 </form>
 </main>
 <script src="/static/js/daftar.js" defer></script>
