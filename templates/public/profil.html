@@ -9,6 +9,7 @@
 <p class="lead">Nama, tanggal lahir, gender, HP, dan email tidak bisa diubah di sini (hubungi admin). Mengubah suku, agama, atau status akan masuk tinjauan ulang tim.</p>
 <form method="post" action="/akun/profil" novalidate><input type="hidden" name="csrf_token" value="{{ csrf }}">
 <label for="domicile">Domisili</label><input id="domicile" name="domicile" type="text" value="{{ v.domicile if v.domicile is not none else '' }}" required maxlength="100">{% if errors.domicile %}<p class="err">{{ errors.domicile }}</p>{% endif %}
+<label for="occupation">Pekerjaan (opsional)</label><input id="occupation" name="occupation" type="text" value="{{ v.occupation if v.occupation is not none else '' }}" maxlength="100">{% if errors.occupation %}<p class="err">{{ errors.occupation }}</p>{% endif %}
 <label for="marga">Marga (opsional)</label><input id="marga" name="marga" type="text" value="{{ v.marga if v.marga is not none else '' }}" maxlength="60">{% if errors.marga %}<p class="err">{{ errors.marga }}</p>{% endif %}
 <label for="ethnicity">Suku</label><select id="ethnicity" name="ethnicity" required>{% for x in o.ethnicity %}<option{% if x == v.ethnicity %} selected{% endif %}>{{ x }}</option>{% endfor %}</select>{% if errors.ethnicity %}<p class="err">{{ errors.ethnicity }}</p>{% endif %}
 <label for="religion">Agama</label><select id="religion" name="religion" required>{% for x in o.religion %}<option{% if x == v.religion %} selected{% endif %}>{{ x }}</option>{% endfor %}</select>{% if errors.religion %}<p class="err">{{ errors.religion }}</p>{% endif %}

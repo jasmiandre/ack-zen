@@ -3,6 +3,7 @@ import os
 import re
 import sqlite3
 import unittest
+from unittest import mock
 from datetime import date
 
 from fastapi.testclient import TestClient
@@ -10,6 +11,7 @@ from fastapi.testclient import TestClient
 import auth
 import db
 import portal
+import register
 import test_stage2 as t2
 from app import create_app
 
@@ -148,7 +150,8 @@ class TestPayment(P):
         r = cl.get("/akun")
         p = self.pay(mid)
         self.assertTrue(1 <= p["unique_code"] <= 999)
-        self.assertTrue(p["due_at"])
+        self.assertIsNone(p["due_at"])                      # no approved deadline source -> NULL, never a made-up 48h
+        self.assertIn("belum ditetapkan", r.text)
         self.assertIn("Rp " + f"{1_500_000 + p['unique_code']:,}".replace(",", "."), r.text)
         self.assertIn("Menunggu Bayar", r.text)
         self.assertIn("BCA 000-000-0000", r.text)
@@ -490,17 +493,175 @@ class TestMigrationV3(unittest.TestCase):
             c.execute("INSERT INTO subscriptions(member_id,program_id,status,created_at) VALUES(1,1,'pending','t')")
             c.execute("INSERT INTO payments(invoice_code,subscription_id,amount_idr,status,created_at) VALUES('INV-2601-0001',1,5,'pending','t')")
             c.close()
-            self.assertEqual(db.dryrun(p), 3)
+            self.assertEqual(db.dryrun(p), db.SCHEMA_VERSION)
             c = db.connect(p)
             self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0], 2)    # dryrun did not touch source
             db.init_db(c)
             db.init_db(c)
-            self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0], 3)
+            self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0], db.SCHEMA_VERSION)
             self.assertEqual(c.execute("SELECT amount_idr,unique_code FROM payments").fetchone()[:], (5, None))
             self.assertEqual(c.execute("SELECT COUNT(*) FROM members").fetchone()[0], 1)
             cols = {r[1] for r in c.execute("PRAGMA table_info(introductions)")}
             self.assertTrue({"resp_a", "resp_b", "match_reason"} <= cols)
             c.close()
+
+
+class TestFileSafety(P):
+    """Fault injection: DB failure must keep old files + valid rows; cleanup failure is retained and retried."""
+
+    def setUp(self):
+        super().setUp()
+        self.cl, self.mid = self.member()
+        self.reject(self.mid, "ktp")
+        self.old = self.w.execute("SELECT * FROM member_files WHERE member_id=? AND kind='ktp_redacted'", (self.mid,)).fetchone()
+        self.up = {"ktp_redacted": ("k.jpg", t2.img_bytes(color=(1, 2, 3)), "image/jpeg")}
+
+    def reject(self, mid, kind, why="x"):
+        self.w.execute("INSERT INTO verifications(member_id,kind,status,note,created_at) VALUES(?,?,'rejected',?,?)",
+                       (mid, kind, why, db.now_iso()))
+
+    def files(self):
+        return set(os.listdir(self.priv))
+
+    def pending(self):
+        return self.w.execute("SELECT * FROM pending_file_cleanup").fetchall()
+
+    def fail_audit(self):
+        """Make the last statement of the upload tx (audit insert) raise -> whole tx rolls back."""
+        self.w.execute("CREATE TRIGGER boom BEFORE INSERT ON audit_log WHEN NEW.action='member_reupload' "
+                       "BEGIN SELECT RAISE(ABORT,'boom'); END")
+
+    def test_db_failure_keeps_old_file_and_row(self):
+        before = self.files()
+        self.fail_audit()
+        r = self.post(self.cl, "/akun/verifikasi/unggah", {"kind": "ktp"}, self.up)
+        self.assertEqual(r.status_code, 500)
+        self.assertEqual(self.files(), before)                       # old kept, new removed
+        rows = self.w.execute("SELECT * FROM member_files WHERE member_id=? AND kind='ktp_redacted'", (self.mid,)).fetchall()
+        self.assertEqual([x["id"] for x in rows], [self.old["id"]])
+        self.assertEqual(self.pending(), [])
+        self.assertEqual(self.w.execute("SELECT status FROM verifications WHERE member_id=? AND kind='ktp'", (self.mid,)).fetchone()[0], "rejected")
+
+    def test_commit_failure_keeps_old_file(self):
+        before = self.files()
+        real = db.tx
+
+        from contextlib import contextmanager
+
+        @contextmanager
+        def bad_tx(conn):
+            with real(conn):
+                yield conn
+                raise sqlite3.OperationalError("commit failed")
+        with mock.patch.object(db, "tx", bad_tx):
+            self.assertEqual(self.post(self.cl, "/akun/verifikasi/unggah", {"kind": "ktp"}, self.up).status_code, 500)
+        self.assertEqual(self.files(), before)
+        self.assertTrue(self.w.execute("SELECT 1 FROM member_files WHERE id=?", (self.old["id"],)).fetchone())
+        self.assertEqual(self.pending(), [])
+
+    def test_cleanup_failure_retained_then_retried(self):
+        real = os.unlink
+        oldp = self.old["stored_path"]
+
+        def flaky(p, *a, **k):
+            if os.path.basename(p) == oldp:
+                raise PermissionError("nope")
+            return real(p, *a, **k)
+        with mock.patch("os.unlink", flaky):
+            self.assertEqual(self.post(self.cl, "/akun/verifikasi/unggah", {"kind": "ktp"}, self.up).status_code, 303)
+        p = self.pending()
+        self.assertEqual([(x["stored_path"], x["member_id"], x["attempts"]) for x in p], [(oldp, self.mid, 1)])
+        self.assertIn(oldp, self.files())                            # retained, not lost, not untracked
+        c = self.w
+        self.assertEqual(portal.reconcile_pending(c, self.priv), 1)  # explicit retry
+        self.assertNotIn(oldp, self.files())
+        self.assertEqual(self.pending(), [])
+        self.assertEqual(portal.reconcile_pending(c, self.priv), 0)
+
+    def test_reconcile_never_deletes_referenced_file(self):
+        self.w.execute("INSERT INTO pending_file_cleanup(member_id,stored_path,created_at) VALUES(?,?,'t')",
+                       (self.mid, self.old["stored_path"]))
+        portal.reconcile_pending(self.w, self.priv)
+        self.assertIn(self.old["stored_path"], self.files())
+        self.assertEqual(self.pending(), [])
+
+    def test_second_photo_write_failure_cleans_first(self):
+        self.reject(self.mid, "foto")
+        before = self.files()
+        real = register._write_private
+        calls = []
+
+        def second_fails(directory, data, ext, name=None):
+            calls.append(name)
+            if len(calls) == 2:
+                raise OSError("disk full")
+            return real(directory, data, ext, name)
+        up = {"photo_body": ("b.jpg", t2.img_bytes(), "image/jpeg"), "photo_face": ("f.jpg", t2.img_bytes(), "image/jpeg")}
+        with mock.patch.object(register, "_write_private", second_fails):
+            self.assertEqual(self.post(self.cl, "/akun/verifikasi/unggah", {"kind": "foto"}, up).status_code, 500)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(self.files(), before)                       # first new file removed, olds kept
+        self.assertEqual(self.pending(), [])
+
+    def test_partial_write_is_removed_even_if_unlink_fails_then_retried(self):
+        real_w = os.fdopen
+
+        class Boom:
+            def __init__(s, fh): s.fh = fh
+            def __enter__(s): return s
+            def __exit__(s, *a): s.fh.close()
+            def write(s, d): s.fh.write(d[:3]); raise OSError("short write")
+        before = self.files()
+        with mock.patch("os.fdopen", lambda fd, m: Boom(real_w(fd, m))):
+            self.assertEqual(self.post(self.cl, "/akun/verifikasi/unggah", {"kind": "ktp"}, self.up).status_code, 500)
+        self.assertEqual(self.files(), before)
+        self.assertEqual(self.pending(), [])
+
+    def test_proof_replace_db_failure_keeps_old_proof(self):
+        self.priced_program()
+        cl, mid = self.member(program="2")
+        up = {"proof": ("b.png", t2.img_bytes("PNG"), "image/png")}
+        self.assertEqual(self.post(cl, "/akun/bayar/unggah", files_=up).status_code, 303)
+        old = self.pay(mid)["proof_file_id"]
+        oldp = self.w.execute("SELECT stored_path FROM member_files WHERE id=?", (old,)).fetchone()[0]
+        self.w.execute("CREATE TRIGGER boom2 BEFORE INSERT ON audit_log WHEN NEW.action='member_payment_proof' "
+                       "BEGIN SELECT RAISE(ABORT,'boom'); END")
+        before = self.files()
+        self.assertEqual(self.post(cl, "/akun/bayar/unggah", files_=up).status_code, 500)
+        self.assertEqual(self.files(), before)
+        self.assertEqual(self.pay(mid)["proof_file_id"], old)
+        self.assertIn(oldp, self.files())
+
+
+class TestTruthLabels(P):
+    def test_timeline_factual_per_stage(self):
+        f = portal.timeline
+        st = lambda *a, **k: [s[1] for s in f(*a, **k)]
+        self.assertEqual(st(False, False, False, True, invoiced=False), ["done", "na", "current", "todo", "done"])
+        self.assertEqual(st(False, False, False, False, invoiced=True), ["done", "current", "todo", "todo", "todo"])
+
+    def test_null_invoice_and_mutual_page(self):
+        a, ma = self.member()
+        b, mb = self.member()
+        self.intro(ma, mb, status="mutual", ra="tertarik", rb="tertarik")
+        r = a.get("/akun")
+        self.assertIn("belum ada tagihan", r.text)
+        self.assertRegex(r.text, r"Perkenalan<small>selesai")
+
+    def test_occupation_and_proposed_photo(self):
+        a, ma = self.member()
+        b, mb = self.member(occupation="Dokter Gigi")
+        i = self.intro(ma, mb)                      # proposed: photo + job shown, contact not
+        r = a.get("/akun")
+        self.assertIn("Dokter Gigi", r.text)
+        self.assertIn(f"/akun/foto/{i}", r.text)
+        self.assertEqual(a.get(f"/akun/foto/{i}").status_code, 200)
+        self.assertNotIn("08123000", r.text)
+        self.assertNotIn("wa.me/62812300", r.text)
+        self.assertNotIn("Instagram", r.text.split("Perkenalan</h2>")[1])
+        self.assertEqual(b.get(f"/akun/foto/{i}").status_code, 200)
+        c, _ = self.member()
+        self.assertEqual(c.get(f"/akun/foto/{i}").status_code, 404)    # non-party
 
 
 if __name__ == "__main__":

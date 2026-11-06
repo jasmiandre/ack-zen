@@ -40,7 +40,7 @@ PUBLISH = {"ya": "Ya", "tidak": "Tidak", "ya_blur": "Ya, dengan wajah diblur"}
 SOURCE = ("Instagram", "TikTok", "WhatsApp", "Teman/Keluarga", "Event", "Lainnya")
 PREF_RELIGION = ("Bebas",) + RELIGION
 STEP_OF = {"full_name": 1, "phone": 1, "email": 1, "password": 1, "password2": 1,
-           "gender": 2, "birth_date": 2, "domicile": 2, "ethnicity": 2, "marga": 2, "religion": 2,
+           "gender": 2, "birth_date": 2, "domicile": 2, "ethnicity": 2, "marga": 2, "occupation": 2, "religion": 2,
            "marital_status": 2, "education": 2, "height_cm": 2,
            "intro": 3, "pref_age_min": 3, "pref_age_max": 3, "pref_religion": 3, "pref_domicile": 3,
            "pref_notes": 3, "publish_consent": 3, "source": 3,
@@ -94,7 +94,7 @@ def validate(f, today=None):
         c["birth_date"] = born.isoformat()
     except ValueError as ex:
         e["birth_date"] = str(ex).capitalize() + "."
-    for k, lim in (("domicile", 100), ("marga", 60), ("pref_domicile", 100), ("pref_notes", 500)):
+    for k, lim in (("domicile", 100), ("marga", 60), ("occupation", 100), ("pref_domicile", 100), ("pref_notes", 500)):
         c[k] = g(k)
         need(k, len(c[k]) <= lim, f"Maksimal {lim} karakter.")
     need("domicile", c["domicile"], "Isi domisili.")
@@ -228,12 +228,20 @@ def _rate_limited(conn, ip):
     return False
 
 
-def _write_private(directory, data, ext):
+def _write_private(directory, data, ext, name=None):
     os.makedirs(directory, mode=0o700, exist_ok=True)
-    name = secrets.token_hex(16) + ext  # random; the client filename is never used
-    fd = os.open(os.path.join(directory, name), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "wb") as fh:
-        fh.write(data)
+    name = name or secrets.token_hex(16) + ext  # random; the client filename is never used
+    path = os.path.join(directory, name)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+    except BaseException as ex:      # partial file: remove it; if even that fails, tell the caller so it can track it
+        try:
+            os.unlink(path)
+        except OSError:
+            ex.orphan = name
+        raise
     return name
 
 
@@ -361,6 +369,7 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet_key, priv_dir):
                      clean["marital_status"], clean["education"], clean["height_cm"], clean["intro"], clean["pref_age_min"],
                      clean["pref_age_max"], clean["pref_religion"], clean["pref_domicile"], clean["pref_notes"],
                      clean["publish_consent"], clean["source"], clean["perlu_review"], now)).lastrowid
+                conn.execute("UPDATE members SET occupation=? WHERE id=?", (clean["occupation"], mid))
                 for slot, (name, enc) in stored.items():
                     conn.execute("INSERT INTO member_files(member_id,kind,stored_path,created_at,encrypted) VALUES(?,?,?,?,?)",
                                  (mid, slot, name, now, enc))

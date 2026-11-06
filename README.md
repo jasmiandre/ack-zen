@@ -186,7 +186,10 @@ Tagihan hanya dibuat jika harga program terisi (NULL = "Info harga via admin", t
 Bukti transfer tersimpan terenkripsi (Fernet) di `data/private`; KTP tetap terenkripsi. Foto kandidat hanya via `/akun/foto/<id perkenalan>` (wajah pasangan pada perkenalan milik sendiri yang belum ditolak); foto/KTP sendiri tidak punya route member.
 
 ### Pertanyaan terbuka (tidak ditebak)
-1. Batas waktu bayar: dipakai 48 jam (`db.PAY_HOURS`), belum dikonfirmasi klien.
+1. Batas waktu bayar: BELUM ADA sumber resmi. `due_at` = NULL (UI: "belum ditetapkan") kecuali env `ACK_PAY_HOURS` diisi eksplisit setelah disetujui klien.
+1b. File privat: dihapus hanya lewat tabel `pending_file_cleanup` (v4, aditif; per member). File baru dicatat sebelum ditulis, catatan dihapus dalam transaksi DB yang sama; file lama dicatat dalam transaksi yang sama dengan pelepasan baris. `portal.reconcile_pending(conn, priv_dir, mid)` (dipanggil di akhir request, maks 20 baris; gagal = tetap di antrean, coba lagi pada panggilan berikutnya). Tanpa cron/daemon: sisa antrean baru diproses saat member itu upload lagi atau reconcile dipanggil manual (`reconcile_pending(conn, priv_dir)` untuk semua).
+1c. Kolom `members.occupation` (pekerjaan, opsional; v4) ditampilkan di kartu kandidat. Foto close-up kandidat boleh tampil pada perkenalan `proposed` maupun `mutual` (hanya pihak terkait); kontak HP hanya saat `mutual`. Kolom IG belum ada di skema.
+1d. Timeline menampilkan fakta per tahap; tanpa tagihan (harga NULL) tahap Pembayaran = "belum ada tagihan", tahap lain tidak digate.
 2. Harga program belum ada -> tagihan belum muncul; kode unik ditambahkan ke harga dasar (penambahan, bukan pengurangan).
 3. Jika salah satu pihak memilih "Tidak", pihak lain hanya melihat "menunggu" lalu kartu hilang? Saat ini kartu pihak yang menunggu tetap tampil sebagai "Menunggu", penolak tidak diungkap; kartu penolak disembunyikan. Perlu konfirmasi klien.
 4. Definisi "Aktif" = langganan `active` (diatur staf Tahap 4); "Perkenalan" selesai = ada pasangan saling tertarik.

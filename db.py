@@ -13,8 +13,8 @@ ROLES = ("owner", "finance", "verifier", "matchmaker", "event")
 ROLE_LABEL = {"owner": "Owner", "finance": "Admin Keuangan", "verifier": "Verifikator",
               "matchmaker": "Matchmaker", "event": "Event"}
 MIN_AGE = 18
-SCHEMA_VERSION = 3   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal (additive, idempotent)
-PAY_HOURS = 48       # invoice deadline; client has not confirmed (README: Pertanyaan terbuka)
+SCHEMA_VERSION = 4   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal (additive, idempotent)
+PAY_HOURS = int(os.environ["ACK_PAY_HOURS"]) if os.environ.get("ACK_PAY_HOURS", "").isdigit() else None  # invoice deadline in hours; None = not set (no approved source) -> due_at NULL, UI "belum ditetapkan"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users_staff(
@@ -122,6 +122,11 @@ CREATE TABLE IF NOT EXISTS deletion_requests(
   member_id INTEGER NOT NULL REFERENCES members(id),
   status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','done','declined')), created_at TEXT NOT NULL);
 CREATE UNIQUE INDEX IF NOT EXISTS deletion_open_uq ON deletion_requests(member_id) WHERE status='open';
+CREATE TABLE IF NOT EXISTS pending_file_cleanup(   -- durable intent to unlink a private file; row survives until unlink succeeded
+  id INTEGER PRIMARY KEY,
+  member_id INTEGER NOT NULL REFERENCES members(id),
+  stored_path TEXT NOT NULL UNIQUE, reason TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS audit_log(
   id INTEGER PRIMARY KEY, ts TEXT NOT NULL,
   staff_id INTEGER REFERENCES users_staff(id), action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '');
@@ -158,7 +163,8 @@ MEMBER_COLS = (
     ("marital_status", "TEXT"), ("education", "TEXT"), ("height_cm", "INTEGER"), ("intro", "TEXT"),
     ("pref_age_min", "INTEGER"), ("pref_age_max", "INTEGER"), ("pref_religion", "TEXT"),
     ("pref_domicile", "TEXT"), ("pref_notes", "TEXT"), ("publish_consent", "TEXT"), ("source", "TEXT"),
-    ("perlu_review", "INTEGER NOT NULL DEFAULT 0 CHECK(perlu_review IN (0,1))"), ("consented_at", "TEXT"))
+    ("perlu_review", "INTEGER NOT NULL DEFAULT 0 CHECK(perlu_review IN (0,1))"), ("consented_at", "TEXT"),
+    ("occupation", "TEXT"))
 V3_COLS = {"payments": (("unique_code", "INTEGER CHECK(unique_code IS NULL OR unique_code BETWEEN 1 AND 999)"),
                         ("due_at", "TEXT"), ("proof_file_id", "INTEGER"), ("reject_reason", "TEXT")),
            "introductions": (("resp_a", "TEXT CHECK(resp_a IS NULL OR resp_a IN ('tertarik','tidak'))"),
@@ -250,6 +256,8 @@ def new_unique_code(conn, amount):
 
 
 def due_iso(start=None):
+    if PAY_HOURS is None:
+        return None
     return ((start or datetime.now(timezone.utc)) + timedelta(hours=PAY_HOURS)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 

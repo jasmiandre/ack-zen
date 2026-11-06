@@ -43,6 +43,7 @@
 {{ inp("birth_date", "Tanggal lahir lengkap", "date", 'max="9999-12-31"', "Wajib tanggal lengkap. Usia minimal 18 tahun, tanpa pengecualian.") }}
 {{ inp("domicile", "Domisili (kota/kecamatan)", extra='maxlength="100"') }}
 {{ sel("ethnicity", "Suku", o.ethnicity) }}
+<label for="occupation">Pekerjaan (opsional)</label><input id="occupation" name="occupation" type="text" maxlength="100"><p class="err" data-err="occupation" role="alert"></p>
 <label for="marga">Marga (opsional)</label><input id="marga" name="marga" type="text" maxlength="60"><p class="err" data-err="marga" role="alert"></p>
 {{ sel("religion", "Agama", o.religion) }}
 {{ sel("marital_status", "Status", o.marital) }}

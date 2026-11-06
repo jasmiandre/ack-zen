@@ -11,7 +11,7 @@
 {% if error %}<p class="err banner-err" role="alert">{{ error }}</p>{% endif %}
 
 <section aria-labelledby="h-status"><h2 id="h-status">Status saya</h2>
-<ol class="tl">{% for name, st in steps %}<li class="{{ st }}"{% if st == 'current' %} aria-current="step"{% endif %}><span class="dot" aria-hidden="true">{% if st == 'done' %}✓{% else %}{{ loop.index }}{% endif %}</span><span>{{ name }}<small>{{ {'done':'selesai','current':'sedang berjalan','todo':'belum'}[st] }}</small></span></li>{% endfor %}</ol>
+<ol class="tl">{% for name, st in steps %}<li class="{{ st }}"{% if st == 'current' %} aria-current="step"{% endif %}><span class="dot" aria-hidden="true">{% if st == 'done' %}✓{% else %}{{ loop.index }}{% endif %}</span><span>{{ name }}<small>{{ {'done':'selesai','current':'sedang berjalan','todo':'belum','na':'belum ada tagihan'}[st] }}</small></span></li>{% endfor %}</ol>
 {% if m.perlu_review %}<p class="hint">Data kamu sedang ditinjau tambahan oleh tim.</p>{% endif %}</section>
 
 <section aria-labelledby="h-bayar"><h2 id="h-bayar">Tagihan &amp; pembayaran</h2>
@@ -19,7 +19,7 @@
 {% else %}<p><span class="badge {{ pstate }}">{{ pay_label[pstate] }}</span> · No. tagihan {{ pay.invoice_code }}</p>
 {% if pay.reject_reason %}<p class="err banner-err">Alasan ditolak: {{ pay.reject_reason }}</p>{% endif %}
 <dl class="kv"><dt>Nominal transfer</dt><dd><strong>{{ rp(total) }}</strong>{% if pay.unique_code %} <span class="hint">(termasuk kode unik {{ '%03d' % pay.unique_code }}; transfer tepat sampai digit terakhir)</span>{% endif %}</dd>
-{% if pay.due_at %}<dt>Batas waktu</dt><dd>{{ pay.due_at[:16]|replace('T',' ') }} UTC{% if overdue %} — <strong>sudah lewat</strong>, hubungi admin{% endif %}</dd>{% endif %}
+<dt>Batas waktu</dt><dd>{% if pay.due_at %}{{ pay.due_at[:16]|replace('T',' ') }} UTC{% if overdue %} — <strong>sudah lewat</strong>, hubungi admin{% endif %}{% else %}belum ditetapkan{% endif %}</dd>
 <dt>Rekening</dt><dd>{% if bank %}{% for l in bank %}{{ l }}{% if not loop.last %}<br>{% endif %}{% endfor %}{% else %}Info rekening belum diatur — hubungi admin.{% endif %}</dd></dl>
 {% if pstate != 'approved' %}<form method="post" action="/akun/bayar/unggah" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf }}">
 <label for="proof">{% if pay.proof_file_id %}Ganti bukti transfer{% else %}Unggah bukti transfer{% endif %} (JPG/PNG/WEBP, maks 10 MB)</label><input id="proof" name="proof" type="file" accept="image/jpeg,image/png,image/webp" required>
@@ -36,7 +36,7 @@
 {% if not cards %}<p>Belum ada kandidat. Matchmaker kami akan mengusulkan setelah akunmu aktif.</p>{% endif %}
 {% for c in cards if c.status != 'declined' or c.mine != 'tidak' %}{% if c.status != 'declined' or c.mine == 'tertarik' %}
 <article class="card">{% if c.status != 'declined' %}<img src="/akun/foto/{{ c.id }}" alt="Foto close up kandidat" width="160" height="160" loading="lazy">{% else %}<span></span>{% endif %}
-<div><p><strong>{{ c.age }} tahun</strong> · {{ c.domicile }} · {{ c.education }}</p><p>{{ c.intro }}</p>
+<div><p><strong>{{ c.age }} tahun</strong> · {{ c.domicile }} · {{ c.education }}{% if c.occupation %} · {{ c.occupation }}{% endif %}</p><p>{{ c.intro }}</p>
 {% if c.reason %}<p><strong>Kenapa cocok:</strong> {{ c.reason }}</p>{% endif %}
 {% if c.mutual %}<p class="badge approved">Saling tertarik</p><p>Kontak: {{ c.contact.name }} — <a href="https://wa.me/{{ c.contact.phone }}">{{ c.contact.phone }}</a></p>
 {% elif c.mine %}<p class="hint">Jawabanmu tersimpan. Menunggu pihak lain.</p>
