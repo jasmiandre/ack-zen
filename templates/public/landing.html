@@ -1,0 +1,221 @@
+{% import "public/_logo.html" as L with context %}
+<!doctype html>
+<html lang="{{ c.meta.lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ c.meta.title }}</title>
+<meta name="description" content="{{ c.meta.description }}">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#2a0a16">
+<link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32.png">
+<link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
+<link rel="preload" href="/static/fonts/playfair-display-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/playfair-display-latin-wght-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/static/css/landing.css">
+</head>
+<body class="lp" data-event-iso="{{ c.event.date_iso }}" data-expired="{{ c.event.countdown_expired }}">
+<a class="skip" href="#utama">{{ c.ui.skip }}</a>
+<p class="demo-banner" role="note">{{ c.ui.demo_banner }}</p>
+
+<header class="top">
+  <a class="brand" href="#atas" aria-label="{{ c.ui.brand_label }}">{{ L.nav() }}</a>
+  <details class="menu">
+    <summary><span class="sr">{{ c.ui.menu_open }}</span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></summary>
+    <nav aria-label="{{ c.ui.nav_label }}">
+      {% for n in c.nav %}<a href="{{ n.href }}">{{ n.label }}</a>{% endfor %}
+    </nav>
+  </details>
+  <a class="btn btn-primary nav-cta" href="#dlg-daftar" data-dialog="dlg-daftar">{{ c.ui.nav_cta }}</a>
+</header>
+
+<main id="utama">
+<section class="hero" id="atas" aria-labelledby="h-hero">
+  <div class="hero-pin">
+    <div class="mesh" aria-hidden="true"></div>
+    <div class="hero-art" role="img" aria-label="{{ c.ui.hero_art_label }}">
+      <svg class="hero-svg" viewBox="0 0 400 400" aria-hidden="true" focusable="false">
+        <defs>
+          <linearGradient id="gA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3d9b1"/><stop offset="1" stop-color="#c98f6b"/></linearGradient>
+          <linearGradient id="gB" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6c3cc"/><stop offset="1" stop-color="#d9708a"/></linearGradient>
+        </defs>
+        {% include "public/_ribbons.svg.html" %}
+      </svg>
+      <canvas class="hero-gl" aria-hidden="true"></canvas>
+    </div>
+    <div class="hero-copy">
+      <h1 id="h-hero" class="split">{{ c.hero.title }}</h1>
+      <p class="tagline">{{ c.hero.tagline }}</p>
+      <p class="lead">{{ c.hero.lead }}</p>
+      <div class="actions">
+        <a class="btn btn-primary magnetic" href="#dlg-daftar" data-dialog="dlg-daftar">{{ c.hero.cta_primary }}</a>
+        <a class="btn btn-ghost magnetic" href="#cara-kerja">{{ c.hero.cta_secondary }}</a>
+      </div>
+      <ul class="trust" aria-label="{{ c.hero.trust_label }}">
+        <li><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c.6-1.6 5.4-1.6 6 0M14 10h4M14 14h3"/></svg>{{ c.hero.trust[0] }}</li>
+        <li><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3"/><path d="M3 20c.5-4 3-6 6-6s5.5 2 6 6M16 11l2 2 4-4"/></svg>{{ c.hero.trust[1] }}</li>
+        <li><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>{{ c.hero.trust[2] }}</li>
+      </ul>
+      <p class="hint" data-static-note hidden>{{ c.ui.motion_static_note }}</p>
+    </div>
+    <p class="scroll-hint" aria-hidden="true">{{ c.ui.scroll_hint }}</p>
+  </div>
+</section>
+
+<section class="sec sec-stats" aria-labelledby="h-stats">
+  <h2 id="h-stats">{{ c.stats.title }}</h2>
+  <p class="sec-note">{{ c.stats.note }}</p>
+  <dl class="stats">
+    {% for s in c.stats["items"] %}<div class="stat"><dt>{{ s.label }}</dt><dd>{{ s.value }}</dd></div>{% endfor %}
+  </dl>
+</section>
+
+<section class="sec sec-why" id="kenapa" aria-labelledby="h-why">
+  <div class="why-head"><h2 id="h-why">{{ c.why.title }}</h2><p>{{ c.why.intro }}</p></div>
+  <ul class="why-list">
+    {% for i in c.why["items"] %}<li class="tilt"><h3>{{ i.title }}</h3><p>{{ i.text }}</p></li>{% endfor %}
+  </ul>
+</section>
+
+<section class="sec sec-how" id="cara-kerja" aria-labelledby="h-how">
+  <h2 id="h-how">{{ c.how.title }}</h2>
+  <p class="sec-note">{{ c.how.intro }}</p>
+  <ol class="timeline">
+    {% for s in c.how.steps %}<li><h3>{{ s.title }}</h3><p>{{ s.text }}</p></li>{% endfor %}
+  </ol>
+</section>
+
+<section class="sec sec-prog" id="program" aria-labelledby="h-prog">
+  <h2 id="h-prog">{{ c.programs.title }}</h2>
+  <p class="sec-note">{{ c.programs.intro }}</p>
+  <ul class="programs">
+    {% for p in c.programs["items"] %}
+    <li class="prog{% if p.featured %} prog-gold{% endif %}">
+      <div class="prog-head">
+        <h3>{{ p.name }}</h3>
+        <span class="tag tag-{{ p.status }}">{{ c.programs.status_existing if p.status == 'existing' else c.programs.status_proposed }}</span>
+      </div>
+      <p class="prog-text">{{ p.text }}</p>
+      <ul class="benefits">{% for b in p.benefits %}<li>{{ b }}</li>{% endfor %}</ul>
+      <dl class="meta">
+        <div><dt>{{ c.programs.price_label }}</dt><dd>{{ c.programs.unknown if p.price is none else p.price }}</dd></div>
+        <div><dt>{{ c.programs.duration_label }}</dt><dd>{{ c.programs.unknown if p.duration_days is none else p.duration_days }}</dd></div>
+        <div><dt>{{ c.programs.quota_label }}</dt><dd>{{ c.programs.unknown if p.intro_quota is none else p.intro_quota }}</dd></div>
+      </dl>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="sec sec-event" id="event" aria-labelledby="h-event">
+  <div class="event-card glass">
+    <p class="badge">{{ c.event.badge }}</p>
+    <h2 id="h-event">{{ c.event.title }}</h2>
+    <p>{{ c.event.text }}</p>
+    <div class="countdown" role="timer" aria-label="{{ c.event.countdown_label }}">
+      <p class="expired" data-expired-msg {% if not cd.expired %}hidden{% endif %}>{{ c.event.countdown_expired }}</p>
+      <div class="cd-grid" {% if cd.expired %}hidden{% endif %}>
+        {% for k in ['d','h','m','s'] %}<div><span class="cd-n" data-cd="{{ k }}">{{ '%02d' % cd[k] }}</span><span class="cd-l">{{ c.event.countdown_units[k] }}</span></div>{% endfor %}
+      </div>
+      <p class="cd-note">{{ c.event.countdown_label }}. {{ c.ui.timezone_note }}.</p>
+    </div>
+    <dl class="ev-meta">
+      <div><dt>{{ c.event.date_label }}</dt><dd>{{ c.event.date_value }}</dd></div>
+      <div><dt>{{ c.event.time_label }}</dt><dd>{{ c.event.time_value }}</dd></div>
+      <div><dt>{{ c.event.venue_label }}</dt><dd>{{ c.event.venue_value }}</dd></div>
+      <div><dt>{{ c.event.price_label }}</dt><dd>{{ c.event.price_value }}</dd></div>
+      <div><dt>{{ c.event.seat_label }}</dt><dd>{{ c.event.seat_value }}</dd></div>
+      <div><dt>{{ c.event.dress_label }}</dt><dd>{{ c.event.dress_value }}</dd></div>
+      <div><dt>{{ c.event.format_label }}</dt><dd>{{ c.event.format_value }}</dd></div>
+      </dl>
+    <p class="sponsors-l">{{ c.event.sponsors_label }}</p>
+    <ul class="sponsors">{% for s in c.event.sponsors %}<li>{{ s }}</li>{% endfor %}</ul>
+    <a class="btn btn-primary magnetic" href="#dlg-event" data-dialog="dlg-event">{{ c.event.cta }}</a>
+  </div>
+</section>
+
+<section class="sec sec-story" aria-labelledby="h-story">
+  <h2 id="h-story">{{ c.stories.title }}</h2>
+  <p class="sec-note">{{ c.stories.intro }}</p>
+  <div class="carousel" role="region" aria-roledescription="carousel" aria-label="{{ c.ui.carousel_label }}">
+    <ul class="slides">
+      {% for s in c.stories["items"] %}
+      <li class="slide">
+        <span class="avatar" aria-hidden="true"><svg viewBox="0 0 64 64" focusable="false"><circle cx="32" cy="24" r="11" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 56c3-14 13-20 22-20s19 6 22 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+        <blockquote><p>{{ s.quote }}</p><footer>{{ s.name }}</footer></blockquote>
+        <p class="slide-note">{{ s.note }}</p>
+      </li>
+      {% endfor %}
+    </ul>
+    {% if c.stories["items"]|length > 1 %}
+    <div class="car-ctl"><button type="button" class="btn btn-ghost" data-car="-1">{{ c.ui.carousel_prev }}</button><button type="button" class="btn btn-ghost" data-car="1">{{ c.ui.carousel_next }}</button></div>
+    {% endif %}
+  </div>
+</section>
+
+<section class="sec sec-priv" id="privasi" aria-labelledby="h-priv">
+  <svg class="shield" viewBox="0 0 64 72" aria-hidden="true" focusable="false"><path d="M32 4 8 14v20c0 17 10 29 24 34 14-5 24-17 24-34V14z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="m22 36 7 7 14-16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <div class="priv-body">
+    <h2 id="h-priv">{{ c.privacy.title }}</h2>
+    <p class="sec-note">{{ c.privacy.intro }}</p>
+    <ul class="priv-list">{% for i in c.privacy["items"] %}<li><h3>{{ i.title }}</h3><p>{{ i.text }}</p></li>{% endfor %}</ul>
+    <p class="legal-note">{{ c.privacy.legal_note }}</p>
+  </div>
+</section>
+
+<section class="sec sec-founder" aria-labelledby="h-founder">
+  <span class="avatar avatar-lg" role="img" aria-label="{{ c.founder.avatar_label }}"><svg viewBox="0 0 64 64" focusable="false" aria-hidden="true"><circle cx="32" cy="24" r="11" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 56c3-14 13-20 22-20s19 6 22 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+  <div>
+    <h2 id="h-founder">{{ c.founder.title }}</h2>
+    <p class="founder-name">{{ c.founder.name }}</p>
+    <p class="founder-role">{{ c.founder.role }}</p>
+    <p>{{ c.founder.text }}</p>
+    <p class="sec-note">{{ c.founder.avatar_label }}</p>
+  </div>
+</section>
+
+<section class="sec sec-faq" id="faq" aria-labelledby="h-faq">
+  <h2 id="h-faq">{{ c.faq.title }}</h2>
+  <p class="sec-note">{{ c.faq.intro }}</p>
+  <div class="faq">
+    {% for f in c.faq["items"] %}<details><summary>{{ f.q }}</summary><p>{{ f.a }}</p></details>{% endfor %}
+  </div>
+</section>
+
+<section class="sec sec-close" aria-labelledby="h-close">
+  <h2 id="h-close">{{ c.closing.title }}</h2>
+  <p>{{ c.closing.text }}</p>
+  <a class="btn btn-primary magnetic" href="#dlg-tutup" data-dialog="dlg-tutup">{{ c.closing.cta }}</a>
+</section>
+</main>
+
+<footer class="foot">
+  {{ L.foot() }}
+  <p>{{ c.footer.text }}</p>
+  <p class="social"><span>{{ c.footer.social_label }}:</span> {% for s in c.footer.social %}<a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.label }}</a> {% endfor %}</p>
+  <p class="foot-links">
+    <a href="#dlg-privacy" data-dialog="dlg-privacy">{{ c.footer.privacy_link }}</a>
+    <a href="#dlg-terms" data-dialog="dlg-terms">{{ c.footer.terms_link }}</a>
+  </p>
+</footer>
+
+<a class="wa" href="{{ c.whatsapp.url }}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M4 20l1.3-4.2A8 8 0 1 1 8.4 18.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.5 8.5c.3 2.6 2.9 5.2 5.5 5.5l1.3-1.3-1.8-1-.9.7c-.8-.4-1.7-1.3-2.1-2.1l.7-.9-1-1.8z" fill="currentColor"/></svg><span>{{ c.whatsapp.button }}</span></a>
+
+{% macro dlg(id, title, paras) %}
+<dialog id="{{ id }}" aria-labelledby="{{ id }}-t">
+  <h2 id="{{ id }}-t">{{ title }}</h2>
+  {% for p in paras %}<p>{{ p }}</p>{% endfor %}
+  <form method="dialog"><button class="btn btn-primary">{{ c.ui.dialog_close }}</button></form>
+</dialog>
+{% endmacro %}
+{{ dlg("dlg-daftar", c.ui.demo_notice_label, [c.hero.cta_primary_demo]) }}
+{{ dlg("dlg-tutup", c.ui.demo_notice_label, [c.closing.cta_demo]) }}
+{{ dlg("dlg-event", c.ui.demo_notice_label, [c.event.cta_demo]) }}
+{{ dlg("dlg-privacy", c.legal.privacy.title, c.legal.privacy.paragraphs) }}
+{{ dlg("dlg-terms", c.legal.terms.title, c.legal.terms.paragraphs) }}
+
+<script src="/static/js/landing.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,391 @@
+{
+  "meta": {
+    "lang": "id",
+    "title": "Aku Cari Kamu — Single Community, Match Making",
+    "description": "Aku Cari Kamu: biro jodoh yang dikurasi manusia. Program perkenalan, verifikasi identitas, dan event komunitas single.",
+    "reference_only_inactive": {
+      "note": "Metadata dari brief. TIDAK dirender sebagai tautan/kontak aktif pada demo ini.",
+      "website": "akucarikamu.id",
+      "whatsapp_admin": "0878-8127-1982"
+    }
+  },
+  "ui": {
+    "skip": "Lewati ke konten utama",
+    "demo_banner": "PROTOTIPE DEMO — data dummy. Bukan situs resmi Aku Cari Kamu; semua angka, testimoni, dan tanggal masih menunggu konfirmasi klien.",
+    "brand_awaiting": "Logo resmi dari klien",
+    "menu_open": "Buka menu",
+    "menu_close": "Tutup menu",
+    "nav_label": "Navigasi utama",
+    "dialog_close": "Tutup",
+    "demo_notice_label": "Informasi pendaftaran",
+    "carousel_label": "Kisah sukses",
+    "carousel_prev": "Kisah sebelumnya",
+    "carousel_next": "Kisah berikutnya",
+    "hero_art_label": "Ilustrasi dua pita cahaya, Aku dan Kamu, yang saling melilit membentuk hati",
+    "scroll_hint": "Gulir untuk melihat dua cahaya menyatu",
+    "motion_static_note": "Mode statis: animasi 3D dimatikan atau tidak tersedia di perangkat ini.",
+    "timezone_note": "Zona waktu Asia/Jakarta (WIB)",
+    "brand_label": "Aku Cari Kamu, ke awal halaman",
+    "logo_alt": "Aku Cari Kamu — Single Community, Match Making",
+    "palette_note": "Palet: coklat tua #523D3D dan dusty rose #A24E61",
+    "logo_tagline": "SINGLE COMMUNITY – MATCH MAKING",
+    "nav_cta": "Daftar"
+  },
+  "nav": [
+    {
+      "href": "#kenapa",
+      "label": "Kenapa ACK"
+    },
+    {
+      "href": "#cara-kerja",
+      "label": "Cara kerja"
+    },
+    {
+      "href": "#program",
+      "label": "Program"
+    },
+    {
+      "href": "#event",
+      "label": "Event"
+    },
+    {
+      "href": "#privasi",
+      "label": "Privasi"
+    },
+    {
+      "href": "#faq",
+      "label": "FAQ"
+    }
+  ],
+  "hero": {
+    "title": "Dua cahaya yang saling mencari.",
+    "lead": "Aku Cari Kamu adalah biro jodoh yang dikurasi manusia, dengan perkenalan yang terverifikasi dan privat.",
+    "cta_primary": "Daftar Sekarang",
+    "cta_secondary": "Lihat Cara Kerja",
+    "cta_primary_demo": "Pendaftaran online dibuka pada Tahap 2. Sementara itu, ikuti kami di Instagram, TikTok, atau channel WhatsApp ACK.",
+    "tagline": "Tempat dimana para “Aku” menCari sang “Kamu”.",
+    "trust": [
+      "Terverifikasi KTP",
+      "Dikurasi manusia",
+      "Data dijaga privat"
+    ],
+    "trust_label": "Jaminan ACK:"
+  },
+  "stats": {
+    "title": "Angka kepercayaan",
+    "note": "Angka resmi akan ditampilkan setelah dikonfirmasi klien.",
+    "items": [
+      {
+        "value": "[JUMLAH MEMBER — konfirmasi klien]",
+        "label": "Member terdaftar"
+      },
+      {
+        "value": "[ANGGOTA KOMUNITAS — konfirmasi klien]",
+        "label": "Anggota komunitas"
+      },
+      {
+        "value": "[PASANGAN BERHASIL — konfirmasi klien]",
+        "label": "Pasangan berhasil"
+      },
+      {
+        "value": "[EVENT DIGELAR — konfirmasi klien]",
+        "label": "Event digelar"
+      }
+    ]
+  },
+  "why": {
+    "title": "Kenapa ACK beda dari dating apps",
+    "intro": "Bukan swipe tanpa henti. Layanan ACK dibangun di sekitar orang, bukan algoritma saja.",
+    "items": [
+      {
+        "title": "Dikurasi manusia",
+        "text": "Matchmaker menimbang profil dan menyarankan perkenalan secara personal, bukan hanya mencocokkan lewat mesin."
+      },
+      {
+        "title": "Identitas terverifikasi KTP",
+        "text": "Staf verifikator memeriksa KTP dan foto sebelum member berstatus terverifikasi."
+      },
+      {
+        "title": "Data rahasia dan terenkripsi",
+        "text": "Berkas sensitif dienkripsi di server dan hanya dibuka staf yang berwenang."
+      },
+      {
+        "title": "Dicocokkan berdasarkan nilai",
+        "text": "Agama, suku, domisili, dan tujuan dipertimbangkan agar perkenalan lebih relevan."
+      }
+    ]
+  },
+  "how": {
+    "title": "Cara kerja",
+    "intro": "Dari pendaftaran sampai bertemu, empat langkah.",
+    "steps": [
+      {
+        "title": "Daftar dan verifikasi",
+        "text": "Isi data diri dan unggah dokumen verifikasi."
+      },
+      {
+        "title": "Pilih program",
+        "text": "Pilih salah satu program ACK sesuai kebutuhanmu."
+      },
+      {
+        "title": "Dikenalkan",
+        "text": "Matchmaker mengusulkan kandidat. Kedua pihak merespons lebih dulu sebelum kontak dibuka."
+      },
+      {
+        "title": "Bertemu",
+        "text": "Bertukar kontak atau dipertemukan sesuai program, lalu memberi umpan balik."
+      }
+    ]
+  },
+  "programs": {
+    "title": "Enam program",
+    "intro": "Empat program sudah berjalan di ACK; dua lainnya masih usulan. Tiket event dijual terpisah dan bukan bagian dari program.",
+    "price_label": "Harga",
+    "duration_label": "Masa aktif",
+    "quota_label": "Kuota perkenalan",
+    "unknown": "Menunggu konfirmasi klien",
+    "status_existing": "Sudah ada",
+    "status_proposed": "Usulan",
+    "items": [
+      {
+        "name": "ACK Komunitas",
+        "status": "existing",
+        "featured": false,
+        "text": "Masuk grup single terkurasi dan dapat info event lebih dulu.",
+        "benefits": [
+          "Grup single terkurasi: Chinese Indo sekitar 600 anggota, Local Indo sekitar 300 anggota (angka dari brief, belum dikonfirmasi)",
+          "Info event lebih awal"
+        ],
+        "price": null,
+        "duration_days": null,
+        "intro_quota": null
+      },
+      {
+        "name": "ACK Bronze",
+        "status": "existing",
+        "featured": false,
+        "text": "Dikenalkan ke calon pasangan.",
+        "benefits": [
+          "Perkenalan ke calon pasangan",
+          "Tukar kontak"
+        ],
+        "price": null,
+        "duration_days": null,
+        "intro_quota": null
+      },
+      {
+        "name": "ACK Silver",
+        "status": "existing",
+        "featured": false,
+        "text": "Profil diiklankan di kanal ACK, dengan izin member.",
+        "benefits": [
+          "Profil diiklankan di Instagram, TikTok, dan grup WhatsApp ACK",
+          "Hanya dengan izin; wajah boleh diblur"
+        ],
+        "price": null,
+        "duration_days": null,
+        "intro_quota": null
+      },
+      {
+        "name": "ACK Gold",
+        "status": "proposed",
+        "featured": false,
+        "text": "Paket gabungan. Masih berupa usulan.",
+        "benefits": [
+          "Beberapa kali perkenalan",
+          "Profil di media sosial",
+          "Prioritas event"
+        ],
+        "price": null,
+        "duration_days": null,
+        "intro_quota": null
+      },
+      {
+        "name": "ACK Platinum / Exclusive",
+        "status": "existing",
+        "featured": true,
+        "text": "Dipertemukan makan berdua, tempat dan jadwal diatur tim.",
+        "benefits": [
+          "Makan berdua yang diatur tim",
+          "Tempat dan jadwal dikoordinasikan staf"
+        ],
+        "price": null,
+        "duration_days": null,
+        "intro_quota": null
+      },
+      {
+        "name": "ACK Private Concierge",
+        "status": "proposed",
+        "featured": true,
+        "text": "Untuk profesional atau high-profile yang butuh privasi. Masih berupa usulan.",
+        "benefits": [
+          "Matchmaker pribadi",
+          "Profil tidak dipublikasikan sama sekali",
+          "Kurasi paling ketat",
+          "Konsultasi 1-on-1"
+        ],
+        "price": null,
+        "duration_days": null,
+        "intro_quota": null
+      }
+    ]
+  },
+  "event": {
+    "title": "Event: Padel Time",
+    "text": "Speed dating, padel, dan snack & coffee bersama komunitas single ACK.",
+    "date_label": "Tanggal",
+    "date_value": "14 November 2026",
+    "date_iso": "2026-11-14T12:00:00+07:00",
+    "countdown_label": "Hitung mundur ke 14 November 2026, 12.00 WIB",
+    "countdown_units": {
+      "d": "hari",
+      "h": "jam",
+      "m": "menit",
+      "s": "detik"
+    },
+    "countdown_expired": "Event sudah berlangsung. Nantikan jadwal berikutnya.",
+    "venue_label": "Lokasi",
+    "venue_value": "El Willy Padel, Meruya, Jakarta Barat",
+    "sponsors_label": "Calon sponsor",
+    "sponsors": [
+      "Balihai",
+      "Bintang",
+      "Yoona",
+      "Freshly Baked",
+      "El Willy Padel",
+      "Bloom Ngopi",
+      "Roemah Koffie"
+    ],
+    "cta": "Daftar Event",
+    "cta_demo": "Pendaftaran event online dibuka pada Tahap 5. Sementara itu, ikuti kami di Instagram, TikTok, atau channel WhatsApp ACK.",
+    "badge": "Event berikutnya",
+    "time_label": "Waktu",
+    "time_value": "12.00–17.00 WIB",
+    "seat_label": "Kuota",
+    "seat_value": "40 seat",
+    "price_label": "Tiket early bird",
+    "price_value": "Rp290.000",
+    "dress_label": "Dress code",
+    "dress_value": "Sporty: sneakers atau flat shoes, tanpa heels.",
+    "format_label": "Acara",
+    "format_value": "Speed dating, padel, snack & coffee"
+  },
+  "stories": {
+    "title": "Kisah sukses",
+    "intro": "Kisah nyata member akan tampil di sini setelah ada izin pasangan.",
+    "items": [
+      {
+        "quote": "[TESTIMONI ASLI — minta izin pasangan]",
+        "name": "[NAMA — hanya dengan izin pasangan]",
+        "note": "Avatar abstrak sebagai penanda, bukan foto atau identitas asli."
+      }
+    ]
+  },
+  "privacy": {
+    "title": "Keamanan dan privasi",
+    "intro": "Cara ACK menjaga data dan identitas member.",
+    "items": [
+      {
+        "title": "KTP disensor dan dienkripsi",
+        "text": "Bagian sensitif KTP disamarkan dan berkas dienkripsi di server."
+      },
+      {
+        "title": "Foto tidak disebar tanpa izin",
+        "text": "Foto hanya dipakai untuk promosi jika member mengizinkan."
+      },
+      {
+        "title": "Wajah diblur di konten event",
+        "text": "Wajah di konten event diblur kecuali ada izin."
+      },
+      {
+        "title": "Akses staf sesuai peran",
+        "text": "Tiap staf hanya melihat area sesuai perannya: Owner, Admin Keuangan, Verifikator, Matchmaker, atau Event."
+      }
+    ],
+    "legal_note": "Kebijakan privasi lengkap tersedia di tautan footer (draf)."
+  },
+  "founder": {
+    "title": "Tim matchmaker dan founder",
+    "name": "[NAMA FOUNDER — konfirmasi klien]",
+    "role": "[JABATAN — konfirmasi klien]",
+    "text": "[PROFIL SINGKAT FOUNDER DAN TIM MATCHMAKER — menunggu teks dan izin dari klien]",
+    "avatar_label": "Avatar abstrak sebagai penanda; bukan foto orang"
+  },
+  "faq": {
+    "title": "Pertanyaan umum",
+    "intro": "Hal yang paling sering ditanyakan.",
+    "items": [
+      {
+        "q": "Apakah ACK berbayar?",
+        "a": "Ya, program ACK berbayar. Harga tiap program menunggu konfirmasi klien."
+      },
+      {
+        "q": "Bagaimana cara bayarnya?",
+        "a": "Lewat transfer manual. Admin keuangan memeriksa bukti transfer sebelum program aktif."
+      },
+      {
+        "q": "Apakah data saya aman?",
+        "a": "KTP disamarkan, berkas dienkripsi di server, dan hanya staf berwenang yang dapat melihatnya. Lihat bagian Keamanan dan privasi."
+      },
+      {
+        "q": "Bagaimana kalau tidak cocok?",
+        "a": "Kebijakan untuk kasus tidak cocok menunggu konfirmasi klien."
+      },
+      {
+        "q": "Untuk agama apa saja?",
+        "a": "Kriteria agama dan nilai menunggu konfirmasi klien."
+      },
+      {
+        "q": "Apa bedanya tiap program?",
+        "a": "Lihat bagian Enam program. Empat program sudah berjalan, dua masih usulan."
+      }
+    ]
+  },
+  "closing": {
+    "title": "Siap bertemu seseorang yang mencarimu?",
+    "text": "Daftar dan mulai perkenalan yang dikurasi.",
+    "cta": "Daftar Sekarang",
+    "cta_demo": "Pendaftaran online dibuka pada Tahap 2. Sementara itu, ikuti kami di Instagram, TikTok, atau channel WhatsApp ACK."
+  },
+  "whatsapp": {
+    "button": "Channel WhatsApp",
+    "url": "https://whatsapp.com/channel/0029Vb98jsT5vK9ziES81z20"
+  },
+  "footer": {
+    "text": "Aku Cari Kamu — Single Community, Match Making.",
+    "privacy_link": "Kebijakan privasi (draf)",
+    "terms_link": "Syarat dan ketentuan (draf)",
+    "social_label": "Ikuti kami",
+    "social": [
+      {
+        "label": "Instagram",
+        "url": "https://www.instagram.com/akucarikamu.id"
+      },
+      {
+        "label": "TikTok",
+        "url": "https://www.tiktok.com/@akucarikamu.id"
+      },
+      {
+        "label": "Channel WhatsApp",
+        "url": "https://whatsapp.com/channel/0029Vb98jsT5vK9ziES81z20"
+      }
+    ]
+  },
+  "legal": {
+    "privacy": {
+      "title": "Kebijakan privasi — DRAF",
+      "paragraphs": [
+        "DRAF, menunggu klien dan penasihat hukum. Teks ini bukan kebijakan resmi.",
+        "Belum ada ketentuan tentang pengumpulan, penggunaan, masa simpan, atau penghapusan data. Ketentuan tersebut akan ditulis setelah klien memutuskannya.",
+        "Prototipe Tahap 1 ini tidak memiliki formulir pendaftaran dan tidak menyimpan data pengunjung."
+      ]
+    },
+    "terms": {
+      "title": "Syarat dan ketentuan — DRAF",
+      "paragraphs": [
+        "DRAF, menunggu klien dan penasihat hukum. Teks ini bukan syarat resmi.",
+        "Ketentuan layanan, pembayaran, pengembalian dana, dan usia minimum akan ditulis setelah klien memutuskannya."
+      ]
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Audit log (200 terakhir)</h1>
+<table><tr><th>Waktu</th><th>Staff</th><th>Aksi</th><th>Detail</th></tr>
+{% for r in rows %}<tr><td>{{ r.ts }}</td><td>{{ r.username or '-' }}</td><td>{{ r.action }}</td><td>{{ r.detail }}</td></tr>{% endfor %}
+</table>
+{% endblock %}

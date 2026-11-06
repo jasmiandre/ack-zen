@@ -1,0 +1,61 @@
+# Environment & secrets
+.env
+.env.*
+!.env.example
+seed_credentials.txt
+
+# Databases & runtime data
+data/
+*.db
+*.db-shm
+*.db-wal
+backup*.db
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Python cache & build
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs & process files
+*.log
+logs/
+screen.log
+
+# Uploads & temporary runtime storage
+uploads/
+upload/
+
+# Node / JS artifacts
+node_modules/
+package-lock.json
+
+# Screenshots & evidence directories (preserves static/img logos and fonts)
+screenshots/
+stage1/
+evidence/
+screens*/
+
+# Media / document exports
+*.mp4
+*.webm
+*.mov
+*.pdf
+
+# Helper & probe scripts (one-off captures and probes)
+shots*.mjs
+lh.sh
+lh_env.sh
+probe*.mjs
+probe2.mjs
+live_smoke.py
+capture*.mjs
+capture*.sh

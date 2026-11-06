@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}ACK Stage 0{% endblock %}</title>
+<style>
+body{font:16px/1.5 system-ui,sans-serif;margin:0;color:#1a1a1a;background:#fafafa}
+.banner{background:#b00020;color:#fff;padding:.6rem 1rem;font-weight:600}
+.banner.warn{background:#7a4b00}
+main{max-width:46rem;margin:1.5rem auto;padding:0 1rem}
+label{display:block;margin:.8rem 0 .2rem}input,button{font:inherit;padding:.5rem;min-height:2.5rem}
+input[type=text],input[type=password]{width:100%;box-sizing:border-box}
+table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:.4rem;text-align:left}
+.err{color:#b00020;font-weight:600}a{color:#0b57d0}
+:focus-visible{outline:3px solid #0b57d0;outline-offset:2px}
+</style></head><body>
+<div class="banner" role="alert">DATA DUMMY &mdash; prototype demo ACK Tahap 0. Jangan masukkan data pribadi/KTP asli.</div>
+{% if http_warning %}<div class="banner warn" role="alert">Peringatan: sesi berjalan lewat HTTP tanpa enkripsi (cookie Secure nonaktif). Hanya untuk data dummy.</div>{% endif %}
+<main>
+{% if sess and sess.staff_id %}
+<nav><a href="/dashboard">Dashboard</a>
+{% if 'owner' in sess.roles %} | <a href="/owner/staff">Staff</a> | <a href="/owner/audit">Audit</a>{% endif %}
+<form method="post" action="/logout" style="display:inline;float:right">
+<input type="hidden" name="csrf_token" value="{{ csrf }}"><button>Keluar ({{ sess.username }})</button></form></nav>
+{% endif %}
+{% if error %}<p class="err" role="alert">{{ error }}</p>{% endif %}
+{% block body %}{% endblock %}
+</main></body></html>

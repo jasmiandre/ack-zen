@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Masuk staff{% endblock %}
+{% block body %}
+<h1>Masuk staff</h1>
+<form method="post" action="/login" autocomplete="off">
+<input type="hidden" name="csrf_token" value="{{ csrf }}">
+<label for="u">Username</label><input id="u" type="text" name="username" required maxlength="64" autocomplete="username">
+<label for="p">Password</label><input id="p" type="password" name="password" required maxlength="256" autocomplete="current-password">
+<p><button>Masuk</button></p>
+</form>
+{% endblock %}
