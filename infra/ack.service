@@ -1,0 +1,19 @@
+[Unit]
+Description=ACK (Aku Cari Kamu) Service
+After=network.target
+
+[Service]
+Type=simple
+User=zen
+Group=zen
+WorkingDirectory=/home/zen/ack-zen
+ExecStart=/home/zen/ack-zen/run.sh
+Restart=on-failure
+RestartSec=3
+UMask=0077
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

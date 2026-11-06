@@ -1,4 +1,4 @@
-# ACK (AyoCariKeluarga) Prototype
+# ACK (Aku Cari Kamu) Prototype
 
 Fondasi aplikasi: FastAPI + Jinja2 + SQLite, autentikasi staff (argon2 password hashing, server-side session cookie), multi-role RBAC, CSRF token, dan audit log minimal.
 Status saat ini: Prototype Tahap 1 (Landing page responsif + Fondasi Tahap 0). Jangan menginput data pribadi asli klien.
@@ -30,8 +30,13 @@ venv/bin/python seed.py
 # seed.py otomatis membuat .env (chmod 600) dan seed_credentials.txt (chmod 600) jika belum ada.
 
 # 3. Jalankan Server
-./run.sh
+# Melalui systemd (recloud-dev):
+sudo cp infra/ack.service /etc/systemd/system/ack.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now ack.service
+
 # Atau manual:
+./run.sh
 # HOST=127.0.0.1 PORT=8088 COOKIE_SECURE=false venv/bin/python -c "import uvicorn, os; uvicorn.run('app:app', host=os.getenv('HOST','127.0.0.1'), port=int(os.getenv('PORT','8088')))"
 
 # 4. Menjalankan Test Suite
@@ -105,11 +110,19 @@ venv\Scripts\python -m unittest -v test_stage1
 
 ---
 
-## Rollback & Penghentian Layanan (Tahap 0)
+## Rollback & Penghentian Layanan (systemd / Tahap 0)
 
 ```bash
-# Menghentikan background service:
-screen -S ack-stage0 -X quit
+# Penghentian / status layanan systemd:
+sudo systemctl status ack.service
+sudo systemctl restart ack.service
+sudo systemctl stop ack.service
+
+# Rollback ke screen manual (jika diperlukan):
+sudo systemctl disable --now ack.service
+# Pastikan port 8088 bebas sebelum start manual
+ss -tulpn | grep 8088
+screen -dmS ack-stage0 ./run.sh
 
 # Data (data/ack.db, .env) tetap DISIMPAN; tidak ada file data yang dihapus.
 # Menutup port publik jika diperlukan:
