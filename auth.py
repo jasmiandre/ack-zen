@@ -10,6 +10,7 @@ from argon2.exceptions import InvalidHashError, VerificationError
 import db
 
 COOKIE = "ack_session"
+MEMBER_COOKIE = "ack_member"   # separate cookie + table: a member session can never act as staff
 TTL = 8 * 3600
 ANON_TTL = 3600
 MAX_USER_FAILS = 5
@@ -73,6 +74,37 @@ def drop_session(conn, th):
 
 def csrf_ok(sess, token):
     return bool(sess) and hmac.compare_digest(sess["csrf"], token or "")
+
+
+def create_member_session(conn, secret, member_id=None):
+    """Fresh token every call (rotation). member_id None = anonymous, only carries a CSRF token."""
+    now = int(time.time())
+    ttl = TTL if member_id else ANON_TTL
+    tok, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(24)
+    conn.execute("DELETE FROM member_sessions WHERE expires_at<?", (now,))
+    if member_id is None:
+        n = conn.execute("SELECT COUNT(*) FROM member_sessions WHERE member_id IS NULL").fetchone()[0]
+        if n >= ANON_CAP:
+            conn.execute("DELETE FROM member_sessions WHERE token_hash IN (SELECT token_hash FROM member_sessions "
+                         "WHERE member_id IS NULL ORDER BY created_at LIMIT ?)", (ANON_CAP // 2,))
+    conn.execute("INSERT INTO member_sessions(token_hash,member_id,csrf,created_at,expires_at) VALUES(?,?,?,?,?)",
+                 (_th(secret, tok), member_id, csrf, now, now + ttl))
+    return tok, csrf, ttl
+
+
+def load_member_session(conn, secret, tok):
+    th = _th(secret, tok)
+    r = conn.execute("SELECT member_id,csrf,expires_at FROM member_sessions WHERE token_hash=?", (th,)).fetchone()
+    if not r:
+        return None
+    if r["expires_at"] < time.time():
+        conn.execute("DELETE FROM member_sessions WHERE token_hash=?", (th,))
+        return None
+    return {"token_hash": th, "member_id": r["member_id"], "csrf": r["csrf"]}
+
+
+def drop_member_session(conn, th):
+    conn.execute("DELETE FROM member_sessions WHERE token_hash=?", (th,))
 
 
 # ponytail: counts failures per username and per IP in a sliding window; table is purged on every

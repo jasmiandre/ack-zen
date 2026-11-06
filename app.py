@@ -4,13 +4,17 @@ import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from cryptography.fernet import Fernet
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from starlette.responses import Response
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 import auth
 import landing
 import db
+import register
+from register import BodyLimit
 import seed
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -18,12 +22,14 @@ USER_RE = re.compile(r"[a-z0-9._-]{3,32}")
 AREAS = tuple(r for r in db.ROLES if r != "owner")
 
 
-def create_app(db_path=None, secret_key=None, cookie_secure=None):
+def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=None):
     env = seed.read_env(seed.ENV_PATH)
     db_path = db_path or seed.DB_PATH
     secret_key = secret_key or env.get("SECRET_KEY") or ""
     if len(secret_key) < 32:
         raise RuntimeError("SECRET_KEY missing/short: run ./run.sh (seed.py generates .env once)")
+    if fernet_key is None:  # "" = explicitly unconfigured (registration answers 503, never stores plaintext KTP)
+        fernet_key = env.get("FERNET_KEY") or ""
     if cookie_secure is None:
         cookie_secure = env.get("COOKIE_SECURE", "false").lower() == "true"
 
@@ -43,6 +49,9 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None):
 
     for sub in ("css", "js", "fonts", "img"):
         app.mount(f"/static/{sub}", StaticFiles(directory=os.path.join(HERE, "static", sub)), name=f"static-{sub}")
+
+    register.mount(app, conn, jenv, secret_key, cookie_secure, fernet_key,
+                   os.path.join(os.path.dirname(os.path.abspath(db_path)), "private"))
 
     def page(request, name, status=200, sess=None, **ctx):
         html = jenv.get_template(name).render(
@@ -74,6 +83,11 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None):
         if request.url.path == "/":  # public landing: pinned CDN allow-list; staff pages keep the tight CSP
             resp.headers["Cache-Control"] = "no-cache"
             resp.headers["Content-Security-Policy"] = landing.PUBLIC_CSP
+        elif request.url.path in ("/daftar", "/akun/masuk", "/akun"):  # self-hosted JS/CSS only; blob: preview of redacted KTP
+            resp.headers["Cache-Control"] = "no-store"
+            resp.headers["Content-Security-Policy"] = ("default-src 'none'; script-src 'self'; style-src 'self'; "
+                "font-src 'self'; img-src 'self' blob: data:; connect-src 'self'; form-action 'self'; "
+                "base-uri 'none'; object-src 'none'; frame-ancestors 'none'")
         elif request.url.path.startswith("/static/"):
             resp.headers["Cache-Control"] = "public, max-age=3600"
             resp.headers["Content-Security-Policy"] = "default-src 'none'"
@@ -81,6 +95,23 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None):
             resp.headers["Cache-Control"] = "no-store"
             resp.headers["Content-Security-Policy"] = "default-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'"
         return resp
+
+    FILE_VIEWERS = {"verifier", "owner"}  # least privilege: only identity verification needs member photos / KTP
+
+    @app.get("/berkas/{file_id}")
+    async def member_file(request: Request, file_id: int):
+        s, redir = staff_or_redirect(request)
+        if redir:
+            return redir
+        if not (s["roles"] & FILE_VIEWERS):
+            return forbidden()
+        r = conn.execute("SELECT member_id,kind,stored_path,encrypted FROM member_files WHERE id=?", (file_id,)).fetchone()
+        data = register.read_private(os.path.join(os.path.dirname(os.path.abspath(db_path)), "private"),
+                                     r["stored_path"], r["encrypted"], Fernet(fernet_key.encode())) if r and fernet_key else None
+        if data is None:
+            return PlainTextResponse("Not found", status_code=404)
+        db.audit(conn, s["staff_id"], "file_view", f"file={file_id} kind={r['kind']}")
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
     @app.get("/health")
     async def health():
@@ -240,4 +271,6 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None):
                             "LEFT JOIN users_staff u ON u.id=a.staff_id ORDER BY a.id DESC LIMIT 200").fetchall()
         return page(request, "audit.html", sess=s, rows=rows)
 
+    # raw ASGI wrapper: cap is enforced on received bytes before multipart parsing
+    app.add_middleware(BodyLimit, path="/daftar/submit", limit=register.BODY_LIMIT)
     return app

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Masuk member — Aku Cari Kamu</title><meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="/static/css/daftar.css"></head>
+<body class="reg"><p class="notice" role="note"><strong>DATA DUMMY — prototipe demo.</strong></p>
+{% if http_warning %}<p class="notice warn" role="alert">Sesi berjalan lewat HTTP tanpa enkripsi. Hanya untuk data dummy.</p>{% endif %}
+<header class="bar"><a href="/" class="back">&larr; Beranda</a><a href="/daftar">Belum punya akun? Daftar</a></header>
+<main id="utama"><h1>Masuk member</h1>
+{% if error %}<p class="err banner-err" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/akun/masuk" autocomplete="off">
+<input type="hidden" name="csrf_token" value="{{ csrf }}">
+<label for="ident">Email atau No. HP</label><input id="ident" name="ident" type="text" required maxlength="254" autocomplete="username">
+<label for="pw">Password</label><input id="pw" name="password" type="password" required maxlength="256" autocomplete="current-password">
+<div class="nav"><button class="btn">Masuk</button></div></form></main></body></html>

@@ -1,6 +1,10 @@
 """SQLite layer: schema, atomic codes, birth-date/age utilities. Dummy data only."""
+import os
 import re
+import shutil
 import sqlite3
+import sys
+import tempfile
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
 
@@ -8,6 +12,7 @@ ROLES = ("owner", "finance", "verifier", "matchmaker", "event")
 ROLE_LABEL = {"owner": "Owner", "finance": "Admin Keuangan", "verifier": "Verifikator",
               "matchmaker": "Matchmaker", "event": "Event"}
 MIN_AGE = 18
+SCHEMA_VERSION = 2   # PRAGMA user_version; v2 = Stage 2 registration columns (additive, idempotent)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users_staff(
@@ -92,6 +97,13 @@ CREATE TABLE IF NOT EXISTS event_regs(
   UNIQUE(event_id, member_id));
 CREATE TABLE IF NOT EXISTS wa_templates(
   id INTEGER PRIMARY KEY, key TEXT NOT NULL UNIQUE, body TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS member_sessions(
+  token_hash TEXT PRIMARY KEY,
+  member_id INTEGER REFERENCES members(id) ON DELETE CASCADE,  -- NULL = anonymous (CSRF for /daftar, /akun/masuk)
+  csrf TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS reg_attempts(id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, ip TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS audit_log(
   id INTEGER PRIMARY KEY, ts TEXT NOT NULL,
   staff_id INTEGER REFERENCES users_staff(id), action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '');
@@ -121,11 +133,65 @@ def connect(path):
     return conn
 
 
+# Stage 2: columns added to the Stage 0 tables (old rows keep NULL / defaults). No override columns: age is a hard gate.
+MEMBER_COLS = (
+    ("email", "TEXT"), ("email_key", "TEXT"), ("phone", "TEXT"), ("password_hash", "TEXT"),
+    ("gender", "TEXT"), ("domicile", "TEXT"), ("ethnicity", "TEXT"), ("marga", "TEXT"), ("religion", "TEXT"),
+    ("marital_status", "TEXT"), ("education", "TEXT"), ("height_cm", "INTEGER"), ("intro", "TEXT"),
+    ("pref_age_min", "INTEGER"), ("pref_age_max", "INTEGER"), ("pref_religion", "TEXT"),
+    ("pref_domicile", "TEXT"), ("pref_notes", "TEXT"), ("publish_consent", "TEXT"), ("source", "TEXT"),
+    ("perlu_review", "INTEGER NOT NULL DEFAULT 0 CHECK(perlu_review IN (0,1))"), ("consented_at", "TEXT"))
+FILE_COLS = (("encrypted", "INTEGER NOT NULL DEFAULT 0 CHECK(encrypted IN (0,1))"),)
+
+
+def migrate(conn):
+    if conn.execute("PRAGMA user_version").fetchone()[0] >= SCHEMA_VERSION:
+        return
+    with tx(conn):
+        for table, cols in (("members", MEMBER_COLS), ("member_files", FILE_COLS)):
+            have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+            for name, ddl in cols:
+                if name not in have:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+        # race-proof uniqueness (NULLs, i.e. pre-Stage-2 rows, never collide)
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS members_phone_uq ON members(phone)")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS members_email_uq ON members(email_key)")
+        conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+
+
 def init_db(conn):
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
     conn.executemany(
         "INSERT OR IGNORE INTO programs(name,description,benefits,sort_order,proposed) VALUES(?,?,?,?,?)", PROGRAMS)
+    migrate(conn)
+
+
+def backup(src, dst):
+    """Online, consistent copy (sqlite backup API; safe while the service runs). Result is mode 600."""
+    s = sqlite3.connect(f"file:{src}?mode=ro", uri=True)
+    d = sqlite3.connect(dst)
+    try:
+        s.backup(d)
+    finally:
+        s.close()
+        d.close()
+    os.chmod(dst, 0o600)
+
+
+def dryrun(src):
+    """Run the migration on a throwaway copy; returns the resulting user_version. Source is never written."""
+    tmp = tempfile.mkdtemp()
+    try:
+        cp = os.path.join(tmp, "copy.db")
+        backup(src, cp)
+        c = connect(cp)
+        init_db(c)
+        v = c.execute("PRAGMA user_version").fetchone()[0]
+        c.close()
+        return v
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 @contextmanager
@@ -176,13 +242,17 @@ def is_adult(born, today=None):
     return age_on(born, today or date.today()) >= MIN_AGE
 
 
+def next_member_code(conn):
+    return f"ACK-{_bump(conn, 'member'):04d}"
+
+
 def add_member(conn, full_name, birth_str, today=None):
     """Create member with next ACK-NNNN. Validates before touching the counter (no burned numbers)."""
     born = parse_birth_date(birth_str)
     if not is_adult(born, today):
         raise ValueError(f"usia minimal {MIN_AGE} tahun")
     with tx(conn):
-        code = f"ACK-{_bump(conn, 'member'):04d}"
+        code = next_member_code(conn)
         conn.execute("INSERT INTO members(code,full_name,birth_date,created_at) VALUES(?,?,?,?)",
                      (code, full_name, born.isoformat(), now_iso()))
     return code
@@ -193,3 +263,12 @@ def price_label(price):
     if price is None:
         return "Info harga via admin"
     return "Gratis" if price == 0 else "Rp " + f"{price:,}".replace(",", ".")
+
+
+if __name__ == "__main__":  # python db.py backup SRC DST | python db.py dryrun SRC
+    if len(sys.argv) == 4 and sys.argv[1] == "backup":
+        backup(sys.argv[2], sys.argv[3])
+    elif len(sys.argv) == 3 and sys.argv[1] == "dryrun":
+        print("dryrun ok, user_version =", dryrun(sys.argv[2]))
+    else:
+        sys.exit("usage: db.py backup SRC DST | db.py dryrun SRC")

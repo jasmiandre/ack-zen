@@ -62,7 +62,6 @@
     "lead": "Aku Cari Kamu adalah biro jodoh yang dikurasi manusia, dengan perkenalan yang terverifikasi dan privat.",
     "cta_primary": "Daftar Sekarang",
     "cta_secondary": "Lihat Cara Kerja",
-    "cta_primary_demo": "Pendaftaran online dibuka pada Tahap 2. Sementara itu, ikuti kami di Instagram, TikTok, atau channel WhatsApp ACK.",
     "tagline": "Tempat dimana para “Aku” menCari sang “Kamu”.",
     "trust": [
       "Terverifikasi KTP",
@@ -344,8 +343,7 @@
   "closing": {
     "title": "Siap bertemu seseorang yang mencarimu?",
     "text": "Daftar dan mulai perkenalan yang dikurasi.",
-    "cta": "Daftar Sekarang",
-    "cta_demo": "Pendaftaran online dibuka pada Tahap 2. Sementara itu, ikuti kami di Instagram, TikTok, atau channel WhatsApp ACK."
+    "cta": "Daftar Sekarang"
   },
   "whatsapp": {
     "button": "Channel WhatsApp",
@@ -378,7 +376,7 @@
       "paragraphs": [
         "DRAF, menunggu klien dan penasihat hukum. Teks ini bukan kebijakan resmi.",
         "Belum ada ketentuan tentang pengumpulan, penggunaan, masa simpan, atau penghapusan data. Ketentuan tersebut akan ditulis setelah klien memutuskannya.",
-        "Prototipe Tahap 1 ini tidak memiliki formulir pendaftaran dan tidak menyimpan data pengunjung."
+        "Prototipe Tahap 2: formulir /daftar menyimpan data dummy di server pengembangan. Jangan memasukkan data pribadi atau KTP asli."
       ]
     },
     "terms": {

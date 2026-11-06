@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Akun member — Aku Cari Kamu</title><meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="/static/css/daftar.css"></head>
+<body class="reg"><p class="notice" role="note"><strong>DATA DUMMY — prototipe demo.</strong></p>
+{% if http_warning %}<p class="notice warn" role="alert">Sesi berjalan lewat HTTP tanpa enkripsi. Hanya untuk data dummy.</p>{% endif %}
+<header class="bar"><a href="/" class="back">&larr; Beranda</a>
+<form method="post" action="/akun/keluar"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="btn ghost">Keluar</button></form></header>
+<main id="utama"><h1>Pendaftaran diterima</h1>
+<p class="lead">Terima kasih, {{ m.full_name }}. Kode member kamu: <strong>{{ m.code }}</strong>.</p>
+<dl class="kv"><dt>Status</dt><dd>Menunggu verifikasi tim ACK{% if m.perlu_review %} (perlu review tambahan){% endif %}</dd>
+{% if sub %}<dt>Program</dt><dd>{{ sub.name }} — langganan menunggu ({{ price(sub.price_idr) }})</dd>{% endif %}</dl>
+<p>Belum ada pembayaran yang diminta. Tim akan menghubungi setelah dokumen diperiksa. Fitur portal lengkap hadir di tahap berikutnya.</p>
+</main></body></html>

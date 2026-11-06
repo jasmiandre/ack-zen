@@ -135,3 +135,31 @@ sudo ufw delete allow 8088/tcp
 
 - Logo yang tampil di template halaman merupakan adaptasi SVG buatan sendiri (`templates/public/_logo.html`, `static/img/favicon.svg`), terinspirasi dari logo asli berupa simbol dua hati outline saling cermin dan wordmark serif bernuansa dusty rose.
 - File logo bitmap resmi tersimpan di direktori aset (`static/img/logo-ack*.png`) dan dipertahankan dalam Git tracking untuk kebutuhan brand identitas.
+
+---
+
+## Tahap 2: Pendaftaran member (`/daftar`)
+
+Scope: form 5 langkah, `/akun` (konfirmasi + masuk/keluar minimal), file privat. **Belum** ada: pembayaran, matching, panel staff untuk member (Tahap 3-4), retensi/cron KTP (Tahap 4).
+
+- Tanggal lahir lengkap, umur >= 18 mutlak. Tidak ada kolom/jalur override.
+- KTP disensor di browser (canvas); hanya blob `ktp_redacted` yang dikirim, dienkripsi Fernet (`FERNET_KEY` di `.env`) di `data/private/<random>.enc`. Foto wajah/badan: Pillow decode, resize 1600px, EXIF dibuang, JPEG, `data/private/<random>.jpg` (bukan folder publik).
+- Akses file: `GET /berkas/<id>` hanya staff `verifier`/`owner`, tiap akses masuk audit log.
+- Cookie member `ack_member` (HttpOnly, SameSite=Lax, Secure sesuai `COOKIE_SECURE`) terpisah dari sesi staff. CSRF di semua POST. Rate limit 10 submit/jam/IP; body upload dibatasi pada byte yang benar-benar diterima.
+- Program berharga NULL/0 -> langganan `pending` tanpa invoice. Status `Belum Resmi Bercerai` / `Menikah/Tunangan/Pacaran` -> `perlu_review=1`, status tetap `pending`.
+- Dependency baru: `pillow==13.0.0` (teruji pada Python 3.14).
+
+### Migrasi, backup, rollback (idempotent, additive)
+
+```bash
+venv/bin/python db.py backup data/ack.db data/ack.db.pre-stage2   # online backup (mode 600). Salin juga .env (FERNET_KEY) - tanpa key, KTP terenkripsi tak bisa dibuka
+venv/bin/python db.py dryrun data/ack.db                          # migrasi pada salinan; sumber tidak disentuh
+venv/bin/pip install -r requirements.txt
+sudo -S -p '' systemctl restart ack                                        # init_db menjalankan migrasi (PRAGMA user_version=2) saat start
+# rollback: systemctl stop ack; kembalikan commit sebelumnya + data/ack.db.pre-stage2; start ack
+```
+
+Tes: `venv/bin/python -m unittest` (112 tes). Coverage: `venv/bin/coverage run -m unittest && venv/bin/coverage report -m`.
+
+### Pertanyaan terbuka untuk klien
+Teks resmi syarat/privasi (masih DRAF), masa retensi KTP, harga dan durasi program, rekening pembayaran, daftar pilihan agama/pendidikan/sumber final.

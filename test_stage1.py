@@ -135,8 +135,7 @@ class TestLanding(Base):
         self.assertNotRegex(self.html, r"(?i)direncanakan|belum aktif|rencana:")
 
     def test_demo_cta_and_legal_are_honest(self):
-        self.assertIn('id="dlg-daftar"', self.html)
-        self.assertIn("Tahap 2", self.html)
+        self.assertIn('href="/daftar"', self.html)   # Stage 2: the register CTAs are real links now
         self.assertIn("Tahap 5", self.html)
         self.assertIn("DRAF", self.html)
         self.assertNotRegex(self.html, r"(?i)\b\d+\s*(hari|bulan|tahun)\b.*(simpan|retensi)")
@@ -283,8 +282,7 @@ class Rev2(Base):
         self.assertEqual(h.split('class="trust"')[1].split("</ul>")[0].count("<svg"), 3)
 
     def test_r7_nav_cta_opens_register_dialog(self):
-        self.assertRegex(self.html, r'<a class="btn btn-primary nav-cta" href="#dlg-daftar" data-dialog="dlg-daftar">Daftar</a>')
-        self.assertIn('id="dlg-daftar"', self.html)
+        self.assertRegex(self.html, r'<a class="btn btn-primary nav-cta" href="/daftar">Daftar</a>')
 
     def test_r8_wa_champagne_not_green_same_target(self):
         wa = [l for l in self.css().splitlines() if l.startswith(".wa{")][0]

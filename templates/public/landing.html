@@ -28,7 +28,7 @@
       {% for n in c.nav %}<a href="{{ n.href }}">{{ n.label }}</a>{% endfor %}
     </nav>
   </details>
-  <a class="btn btn-primary nav-cta" href="#dlg-daftar" data-dialog="dlg-daftar">{{ c.ui.nav_cta }}</a>
+  <a class="btn btn-primary nav-cta" href="/daftar">{{ c.ui.nav_cta }}</a>
 </header>
 
 <main id="utama">
@@ -50,7 +50,7 @@
       <p class="tagline">{{ c.hero.tagline }}</p>
       <p class="lead">{{ c.hero.lead }}</p>
       <div class="actions">
-        <a class="btn btn-primary magnetic" href="#dlg-daftar" data-dialog="dlg-daftar">{{ c.hero.cta_primary }}</a>
+        <a class="btn btn-primary magnetic" href="/daftar">{{ c.hero.cta_primary }}</a>
         <a class="btn btn-ghost magnetic" href="#cara-kerja">{{ c.hero.cta_secondary }}</a>
       </div>
       <ul class="trust" aria-label="{{ c.hero.trust_label }}">
@@ -187,7 +187,7 @@
 <section class="sec sec-close" aria-labelledby="h-close">
   <h2 id="h-close">{{ c.closing.title }}</h2>
   <p>{{ c.closing.text }}</p>
-  <a class="btn btn-primary magnetic" href="#dlg-tutup" data-dialog="dlg-tutup">{{ c.closing.cta }}</a>
+  <a class="btn btn-primary magnetic" href="/daftar">{{ c.closing.cta }}</a>
 </section>
 </main>
 
@@ -210,8 +210,6 @@
   <form method="dialog"><button class="btn btn-primary">{{ c.ui.dialog_close }}</button></form>
 </dialog>
 {% endmacro %}
-{{ dlg("dlg-daftar", c.ui.demo_notice_label, [c.hero.cta_primary_demo]) }}
-{{ dlg("dlg-tutup", c.ui.demo_notice_label, [c.closing.cta_demo]) }}
 {{ dlg("dlg-event", c.ui.demo_notice_label, [c.event.cta_demo]) }}
 {{ dlg("dlg-privacy", c.legal.privacy.title, c.legal.privacy.paragraphs) }}
 {{ dlg("dlg-terms", c.legal.terms.title, c.legal.terms.paragraphs) }}
