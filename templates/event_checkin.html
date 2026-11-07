@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Check-in: {{ e.title }}</h1>
+{% if msg %}<p role="alert" id="result">{{ msg }}</p>{% else %}<p role="status" id="result"></p>{% endif %}
+<div id="cam" hidden>
+<video id="video" playsinline muted style="max-width:100%"></video>
+<p><button type="button" id="stop">Matikan kamera</button></p></div>
+<p id="camnote"></p>
+<p><button type="button" id="start" hidden>Mulai kamera</button></p>
+<form method="post" action="/staff/event/{{ e.id }}/checkin" id="manual" autocomplete="off">
+<input type="hidden" name="csrf_token" value="{{ csrf }}">
+<label for="token">Token tiket (entri manual)</label>
+<input id="token" name="token" type="password" maxlength="64" required autocomplete="off" spellcheck="false">
+<p><button>Check-in</button></p></form>
+<p><a href="/staff/event/{{ e.id }}">Kembali</a></p>
+<script src="/static/js/checkin.js" defer></script>
+{% endblock %}

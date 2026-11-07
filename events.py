@@ -8,11 +8,14 @@ import json
 import os
 import re
 import secrets
+import io
 import sqlite3
 from datetime import date, datetime
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
+
+import segno
 
 import auth
 import db
@@ -670,3 +673,74 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet=None, priv_dir=None
             if n:
                 db.audit(conn, s["staff_id"], "event_payment_reject", f"reg={rid}")
         return fin_queue(s, 200 if n else 409, "Ditolak; member diminta unggah ulang." if n else "Sudah diproses.")
+
+    # ---- Stage 5 chunk 3: QR ticket (member) + staff check-in ------------------
+    # QR payload = random token only (192 bit, no PII). It is a check-in credential: shown only to the owner of a
+    # paid/checked_in registration (no-store), accepted only via CSRF POST, never logged/audited/put in a URL.
+    # ponytail: token stored plaintext so the ticket can be re-rendered; hash+re-issue if DB read-leak is in scope.
+    NO_STORE = {"Cache-Control": "no-store"}
+
+    @app.get("/akun/event/{rid}/tiket.svg")
+    async def ev_ticket(request: Request, rid: str):
+        s = member_sess(request)
+        if not s:
+            return PlainTextResponse("Not found", status_code=404, headers=NO_STORE)
+        r = own_reg(s, rid)
+        if not r or r["status"] not in ("paid", "checked_in"):
+            return PlainTextResponse("Not found", status_code=404, headers=NO_STORE)
+        tok = r["qr_token"]
+        if not tok:
+            with db.tx(conn):   # first writer wins; everyone re-reads the persisted value
+                conn.execute("UPDATE event_regs SET qr_token=? WHERE id=? AND qr_token IS NULL AND status IN ('paid','checked_in')",
+                             (secrets.token_urlsafe(24), r["id"]))
+            tok = conn.execute("SELECT qr_token FROM event_regs WHERE id=?", (r["id"],)).fetchone()[0]
+        buf = io.BytesIO()
+        segno.make(tok, error="m", micro=False).save(buf, kind="svg", scale=6, border=4, xmldecl=False, svgns=True)
+        return Response(buf.getvalue(), media_type="image/svg+xml", headers=NO_STORE)
+
+    def scan_page(s, e, status=200, msg=None):
+        return render("event_checkin.html", status, s, s["csrf"], e=e, msg=msg)
+
+    @app.get("/staff/event/{eid}/checkin")
+    async def ev_scan(request: Request, eid: int):
+        s, bad = gate(request)
+        if bad:
+            return bad
+        e = ev_or_none(eid)
+        return scan_page(s, e) if e else PlainTextResponse("Not found", status_code=404)
+
+    @app.post("/staff/event/{eid}/checkin")
+    async def ev_checkin(request: Request, eid: int):
+        s, form, bad = await post_gate(request)
+        if bad:
+            return bad
+        e = ev_or_none(eid)
+        if not e:
+            return PlainTextResponse("Not found", status_code=404)
+        tok = str(form.get("token") or "").strip()
+        code, msg = 400, "Token tidak valid."
+        name, n = None, 0
+        if re.fullmatch(r"[A-Za-z0-9_-]{16,64}", tok):
+            with db.tx(conn):   # single winner: the status/event guard is part of the UPDATE
+                n = conn.execute("UPDATE event_regs SET status='checked_in',checked_in_at=?,checked_in_by=? WHERE qr_token=? "
+                                 "AND event_id=? AND status='paid' AND EXISTS(SELECT 1 FROM events WHERE id=? AND active=1)",
+                                 (db.now_iso(), s["staff_id"], tok, eid, eid)).rowcount
+                r = conn.execute("SELECT r.id,r.event_id,r.status,m.code FROM event_regs r JOIN members m ON m.id=r.member_id "
+                                 "WHERE r.qr_token=?", (tok,)).fetchone()
+                if n:
+                    db.audit(conn, s["staff_id"], "event_checkin", f"event={eid} reg={r['id']}")   # ids only, never the token
+            if n:
+                code, msg, name = 200, "Check-in berhasil.", r["code"]
+            elif r and r["event_id"] == eid and r["status"] == "checked_in":
+                code, msg, name = 200, "Sudah check-in sebelumnya (tidak dihitung ulang).", r["code"]
+            elif r and r["event_id"] != eid:
+                code, msg = 409, "Tiket untuk event lain."
+            elif r and not e["active"]:
+                code, msg = 409, "Event tidak aktif."
+            elif r:
+                code, msg = 409, "Tiket belum lunas / tidak dapat dipakai."
+        already = code == 200 and not n
+        if "application/json" in request.headers.get("accept", ""):
+            return JSONResponse({"ok": code == 200, "already": already, "message": msg, "member": name},
+                                status_code=code, headers=NO_STORE)
+        return scan_page(s, e, code, msg + (f" ({name})" if name else ""))

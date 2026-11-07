@@ -13,6 +13,8 @@ Nominal: {{ ('Rp %s' % '{:,}'.format(r.locked_price_idr).replace(',', '.')) if r
 <label for="proof">Bukti transfer (JPG/PNG/WEBP, maks 10 MB)</label><input id="proof" type="file" name="proof" accept="image/jpeg,image/png,image/webp" required>
 <p><button>Unggah bukti</button></p></form>{% endif %}
 {% elif r.status == 'proof_uploaded' %}<p>Bukti diterima; menunggu verifikasi Finance.</p>
-{% elif r.status == 'paid' %}<p>Pembayaran terverifikasi.</p>{% endif %}
+{% elif r.status in ('paid', 'checked_in') %}<p>{{ 'Sudah check-in.' if r.status == 'checked_in' else 'Pembayaran terverifikasi.' }}</p>
+<p>Tiket QR (tunjukkan ke staf di pintu masuk; jangan dibagikan atau dipublikasikan):</p>
+<img src="/akun/event/{{ r.id }}/tiket.svg" alt="Kode QR tiket check-in" width="240" height="240">{% endif %}
 <p><a href="/event/{{ r.slug }}">Kembali ke event</a></p>
 {% endblock %}
