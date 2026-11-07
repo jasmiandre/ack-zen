@@ -20,7 +20,7 @@ table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;pad
 {% if 'finance' in sess.roles or 'owner' in sess.roles %} | <a href="/keuangan">Pembayaran</a>{% endif %}
 {% if 'matchmaker' in sess.roles or 'owner' in sess.roles %} | <a href="/anggota">Member</a> | <a href="/perkenalan">Perkenalan</a>{% endif %}
 {% if 'verifier' in sess.roles or 'owner' in sess.roles %} | <a href="/verifikasi">Verifikasi</a>{% endif %}
-{% if 'owner' in sess.roles %} | <a href="/owner/ktp-retensi">Retensi KTP</a> | <a href="/owner/program">Program</a> | <a href="/owner/staff">Staff</a> | <a href="/owner/audit">Audit</a>{% endif %}
+{% if 'owner' in sess.roles %} | <a href="/owner/ktp-retensi">Retensi KTP</a> | <a href="/owner/program">Program</a> | <a href="/owner/staff">Staff</a> | <a href="/owner/impor">Impor CSV</a> | <a href="/owner/audit">Audit</a>{% endif %}
 <form method="post" action="/logout" style="display:inline;float:right">
 <input type="hidden" name="csrf_token" value="{{ csrf }}"><button>Keluar ({{ sess.username }})</button></form></nav>
 {% endif %}

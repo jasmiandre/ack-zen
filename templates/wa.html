@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>WhatsApp {{ code }}</h1>
+<p>Tautan membuka WhatsApp dengan teks siap kirim; staf menekan kirim sendiri. Aplikasi tidak mengirim pesan.</p>
+<ul>{% for key, url in tpls %}<li>{{ key }}: {% if url %}<a href="{{ url }}" rel="noopener noreferrer" target="_blank">Buka WhatsApp</a>{% else %}(nomor HP belum ada){% endif %}</li>{% else %}<li>Tidak ada template untuk peran Anda.</li>{% endfor %}</ul>
+{% endblock %}

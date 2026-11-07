@@ -20,6 +20,7 @@ import seed
 import matching
 import pipeline
 import staff
+import ops
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 USER_RE = re.compile(r"[a-z0-9._-]{3,32}")
@@ -62,6 +63,7 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
 
     staff.mount(app, conn, jenv, secret_key, cookie_secure, Fernet(fernet_key.encode()) if fernet_key else None, priv)
 
+    ops.mount(app, conn, jenv, secret_key, cookie_secure, Fernet(fernet_key.encode()) if fernet_key else None, priv)
     pipeline.mount(app, conn, jenv, secret_key, cookie_secure)
     matching.mount(app, conn, jenv, secret_key, cookie_secure)
 
@@ -280,9 +282,16 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
         s, bad = owner_only(request)
         if bad:
             return bad
+        q = request.query_params
+        act = (q.get("action") or "").strip()[:60]
+        pg = int(q["page"]) if (q.get("page") or "").isascii() and (q.get("page") or "").isdigit() and len(q["page"]) <= 6 and int(q["page"]) >= 1 else 1
+        where, args = ("WHERE a.action=? ", (act,)) if act else ("", ())
+        total = conn.execute(f"SELECT COUNT(*) FROM audit_log a {where}", args).fetchone()[0]
         rows = conn.execute("SELECT a.ts,a.action,a.detail,u.username FROM audit_log a "
-                            "LEFT JOIN users_staff u ON u.id=a.staff_id ORDER BY a.id DESC LIMIT 200").fetchall()
-        return page(request, "audit.html", sess=s, rows=rows)
+                            f"LEFT JOIN users_staff u ON u.id=a.staff_id {where}ORDER BY a.id DESC LIMIT 50 OFFSET ?",
+                            args + ((pg - 1) * 50,)).fetchall()
+        actions = [r[0] for r in conn.execute("SELECT DISTINCT action FROM audit_log ORDER BY 1")]
+        return page(request, "audit.html", sess=s, rows=rows, act=act, pg=pg, pages=max(1, -(-total // 50)), actions=actions)
 
     # raw ASGI wrapper: cap is enforced on received bytes before multipart parsing
     app.add_middleware(BodyLimit, path="/daftar/submit", limit=register.BODY_LIMIT)

@@ -186,6 +186,14 @@ class Conn(sqlite3.Connection):
         with self.lock:
             return _Res(super().executemany(*a))
 
+    def executescript(self, *a):   # real call path: init_db at startup; guarded so it cannot land inside another thread's tx
+        with self.lock:
+            return super().executescript(*a)
+
+    def close(self):   # real call path: lifespan shutdown / dryrun; waits for any in-flight tx
+        with self.lock:
+            return super().close()
+
 
 def connect(path):
     conn = sqlite3.connect(path, isolation_level=None, check_same_thread=False, timeout=30, factory=Conn)
@@ -236,9 +244,20 @@ def migrate(conn):
         conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
 
+WA_TEMPLATES = (   # body placeholder: {kode} only (member code). Never sent by the app: staff opens wa.me link manually.
+    ("welcome", "Halo {kode}, selamat datang di ACK! Tim kami akan membantu langkah berikutnya. Terima kasih."),
+    ("bayar_info", "Halo {kode}, tagihan ACK Anda sudah tersedia di portal. Mohon unggah bukti transfer di portal. Terima kasih."),
+    ("bayar_pengingat", "Halo {kode}, pengingat: pembayaran ACK Anda belum kami terima. Mohon unggah bukti transfer di portal."),
+    ("verifikasi_tolak", "Halo {kode}, verifikasi data Anda belum dapat kami setujui. Silakan cek portal ACK untuk catatannya."),
+    ("kandidat", "Halo {kode}, ada usulan perkenalan untuk Anda. Silakan buka portal ACK untuk menanggapi."),
+    ("event_pengingat", "Halo {kode}, ini pengingat event ACK yang Anda ikuti. Sampai jumpa!"),
+)
+
+
 def init_db(conn):
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
+    conn.executemany("INSERT OR IGNORE INTO wa_templates(key,body) VALUES(?,?)", WA_TEMPLATES)
     conn.executemany(
         "INSERT OR IGNORE INTO programs(name,description,benefits,sort_order,proposed) VALUES(?,?,?,?,?)", PROGRAMS)
     migrate(conn)
