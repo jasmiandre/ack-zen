@@ -168,8 +168,10 @@ class G(t4.S):
         self.assertEqual((self.cnt("members"), self.cnt("member_files"), self.cnt("event_regs")), (0, 0, 0))
         self.assertEqual(len(self.gq()), 2)                       # intent survived the crash
         self.assertIn(calls[0], os.listdir(self.priv))           # orphan exists but is tracked
-        self.assertEqual(portal.reconcile_guest(self.w, self.priv), 0)   # fresh rows: in-flight protection, not deleted yet
-        self.assertEqual(portal.reconcile_guest(self.w, self.priv, min_age_s=0), 2)
+        with portal.guest_lock(self.priv):   # an in-flight registration (any age) holds the lock shared
+            self.assertEqual(portal.reconcile_guest(self.w, self.priv), 0)
+            self.assertEqual(len(self.gq()), 2)
+        self.assertEqual(portal.reconcile_guest(self.w, self.priv), 2)
         self.assertEqual((os.listdir(self.priv), self.gq()), ([], []))
 
     def test_partial_write_and_unlink_failure_stay_queued(self):
@@ -184,7 +186,7 @@ class G(t4.S):
         self.assertEqual(len(self.gq()), 2)
         self.assertEqual(self.w.execute("SELECT MIN(attempts) FROM pending_guest_files").fetchone()[0], 1)
         self.assertEqual(len(os.listdir(self.priv)), 1)
-        self.assertEqual(portal.reconcile_guest(self.w, self.priv, min_age_s=0), 2)
+        self.assertEqual(portal.reconcile_guest(self.w, self.priv), 2)
         self.assertEqual((os.listdir(self.priv), self.gq()), ([], []))
 
     def test_rollback_unlink_failure_queued_then_retried(self):
@@ -195,7 +197,7 @@ class G(t4.S):
         self.assertEqual(len(self.gq()), 2)
         self.assertEqual(len(os.listdir(self.priv)), 2)
         self.assertEqual(self.w.execute("SELECT MIN(attempts) FROM pending_guest_files").fetchone()[0], 1)
-        portal.reconcile_guest(self.w, self.priv, min_age_s=0)
+        portal.reconcile_guest(self.w, self.priv)
         self.assertEqual((os.listdir(self.priv), self.gq()), ([], []))
 
     def test_success_clears_queue_and_referenced_never_deleted(self):
@@ -204,9 +206,54 @@ class G(t4.S):
         paths = [p for (p,) in self.w.execute("SELECT stored_path FROM member_files")]
         for p in paths:   # even a stray queue row for a referenced file must not delete it
             self.w.execute("INSERT INTO pending_guest_files(stored_path,created_at) VALUES(?,'2001-01-01T00:00:00Z')", (p,))
-        self.assertEqual(portal.reconcile_guest(self.w, self.priv, min_age_s=0), 2)
+        self.assertEqual(portal.reconcile_guest(self.w, self.priv), 2)
         self.assertEqual(sorted(os.listdir(self.priv)), sorted(paths))
         self.assertEqual(self.gq(), [])
+
+    def test_aged_active_upload_not_deleted_by_concurrent_reconcile(self):
+        # A stages files (row aged far beyond any 'grace'), pauses before the DB tx; B's general reconcile must not touch it.
+        seen = {}
+        cl = TestClient(self.app, follow_redirects=False)
+        csrf = re.search(r'name="csrf_token" value="([^"]+)"', cl.get("/event/dinner-demo/tamu").text).group(1)
+        orig = register._write_private
+
+        def pause(d, data, ext, name=None):
+            r = orig(d, data, ext, name) if name else orig(d, data, ext)
+            c = events.db.connect(self.dbp)   # B: its own connection (A runs in the server thread)
+            c.execute("UPDATE pending_guest_files SET created_at='2001-01-01T00:00:00Z'")
+            seen["b"] = portal.reconcile_guest(c, self.priv)
+            c.close()    # B runs while A is paused mid-flight
+            seen["files"] = len(os.listdir(self.priv))
+            return r
+        with mock.patch.object(register, "_write_private", pause):
+            self.assertEqual(self.post(cl=cl, csrf=csrf).status_code, 200)
+        self.assertEqual(seen["b"], 0)
+        self.assertGreaterEqual(seen["files"], 1)
+        self.assertEqual(self.cnt("member_files"), 2)
+        for (p,) in self.w.execute("SELECT stored_path FROM member_files"):
+            self.assertIn(p, os.listdir(self.priv))
+        self.assertEqual(self.gq(), [])
+
+    def test_lock_released_when_holder_process_is_killed(self):
+        import signal
+        import subprocess
+        import sys
+        import time
+        code = ("import sys,portal\nwith portal.guest_lock(sys.argv[1]):\n print('held',flush=True)\n import time; time.sleep(60)")
+        pr = subprocess.Popen([sys.executable, "-c", code, self.priv], stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(pr.stdout.readline().strip(), "held")
+            self.w.execute("INSERT INTO pending_guest_files(stored_path,created_at) VALUES(?,'2001-01-01T00:00:00Z')", ("b" * 32 + ".jpg",))
+            with open(os.path.join(self.priv, "b" * 32 + ".jpg"), "wb") as fh:
+                fh.write(b"x")
+            self.assertEqual(portal.reconcile_guest(self.w, self.priv), 0)   # other process in flight
+            pr.send_signal(signal.SIGKILL)
+            pr.wait()
+        finally:
+            pr.kill()
+            pr.stdout.close()
+        self.assertEqual(portal.reconcile_guest(self.w, self.priv), 1)       # OS released it; queue recovered
+        self.assertEqual((os.listdir(self.priv), self.gq()), ([], []))
 
     def test_stale_retry_runs_on_next_registration(self):
         self.w.execute("INSERT INTO pending_guest_files(stored_path,created_at) VALUES('%s','2001-01-01T00:00:00Z')" % ("a" * 32 + ".jpg"))

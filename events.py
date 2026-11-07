@@ -479,47 +479,48 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet=None, priv_dir=None
             # never attach to / take over an existing account: tell them to log in
             return JSONResponse({"ok": False, "login": "/akun/masuk", "errors": {"phone": "Nomor HP atau email sudah terdaftar. Silakan masuk, lalu daftar event dari akun Anda."}}, status_code=409)
         portal.reconcile_guest(conn, priv_dir)   # bounded explicit retry of stale leftovers (no cron)
-        written = []
-        try:
-            stored = {}
-            names = {slot: (secrets.token_hex(16) + (".enc" if slot == "ktp_redacted" else ".jpg")) for slot in imgs}
-            with db.tx(conn):   # intent is COMMITTED before any byte is written: a hard crash can only leave a tracked row
-                for n in names.values():
-                    conn.execute("INSERT INTO pending_guest_files(stored_path,created_at) VALUES(?,?)", (n, db.now_iso()))
-            written = list(names.values())
-            for slot, data in imgs.items():
-                enc = slot == "ktp_redacted"
-                register._write_private(priv_dir, fernet.encrypt(data) if enc else data, ".enc" if enc else ".jpg", names[slot])
-                stored[slot] = (names[slot], int(enc))
-            pw_hash = auth.hash_password(clean["password"])
-            now = db.now_iso()
-            with db.tx(conn):   # member + files + event reg commit or roll back together
-                if not conn.execute("SELECT 1 FROM events WHERE id=? AND active=1", (e["id"],)).fetchone():
-                    raise LookupError
-                code = db.next_member_code(conn)
-                mid = conn.execute(
-                    "INSERT INTO members(code,full_name,birth_date,status,created_at,email,email_key,phone,password_hash,gender,consented_at) "
-                    "VALUES(?,?,?,'pending',?,?,?,?,?,?,?)",
-                    (code, clean["full_name"], clean["birth_date"], now, clean["email"], clean["email_key"], clean["phone"],
-                     pw_hash, clean["gender"], now)).lastrowid
-                for slot, (name, enc) in stored.items():
-                    conn.execute("INSERT INTO member_files(member_id,kind,stored_path,created_at,encrypted) VALUES(?,?,?,?,?)",
-                                 (mid, slot, name, now, enc))
-                    conn.execute("DELETE FROM pending_guest_files WHERE stored_path=?", (name,))   # now referenced
-                conn.execute("INSERT INTO event_regs(event_id,member_id,status,created_at,answers) VALUES(?,?,'registered',?,?)",
-                             (e["id"], mid, now, json.dumps(ans, ensure_ascii=False)))
-                db.audit(conn, None, "event_guest_register", f"member={code} event={e['id']}")
-        except LookupError:
-            _unlink(written)
-            return JSONResponse({"ok": False, "error": "Event tidak tersedia."}, status_code=404)
-        except sqlite3.IntegrityError:
-            _unlink(written)
-            if not conn.execute("SELECT 1 FROM members WHERE phone=? OR email_key=?", (clean["phone"], clean["email_key"])).fetchone():
+        with portal.guest_lock(priv_dir):   # SHARED from before the intent row until commit/cleanup is done (see portal.guest_lock)
+            written = []
+            try:
+                stored = {}
+                names = {slot: (secrets.token_hex(16) + (".enc" if slot == "ktp_redacted" else ".jpg")) for slot in imgs}
+                with db.tx(conn):   # intent is COMMITTED before any byte is written: a hard crash can only leave a tracked row
+                    for n in names.values():
+                        conn.execute("INSERT INTO pending_guest_files(stored_path,created_at) VALUES(?,?)", (n, db.now_iso()))
+                written = list(names.values())
+                for slot, data in imgs.items():
+                    enc = slot == "ktp_redacted"
+                    register._write_private(priv_dir, fernet.encrypt(data) if enc else data, ".enc" if enc else ".jpg", names[slot])
+                    stored[slot] = (names[slot], int(enc))
+                pw_hash = auth.hash_password(clean["password"])
+                now = db.now_iso()
+                with db.tx(conn):   # member + files + event reg commit or roll back together
+                    if not conn.execute("SELECT 1 FROM events WHERE id=? AND active=1", (e["id"],)).fetchone():
+                        raise LookupError
+                    code = db.next_member_code(conn)
+                    mid = conn.execute(
+                        "INSERT INTO members(code,full_name,birth_date,status,created_at,email,email_key,phone,password_hash,gender,consented_at) "
+                        "VALUES(?,?,?,'pending',?,?,?,?,?,?,?)",
+                        (code, clean["full_name"], clean["birth_date"], now, clean["email"], clean["email_key"], clean["phone"],
+                         pw_hash, clean["gender"], now)).lastrowid
+                    for slot, (name, enc) in stored.items():
+                        conn.execute("INSERT INTO member_files(member_id,kind,stored_path,created_at,encrypted) VALUES(?,?,?,?,?)",
+                                     (mid, slot, name, now, enc))
+                        conn.execute("DELETE FROM pending_guest_files WHERE stored_path=?", (name,))   # now referenced
+                    conn.execute("INSERT INTO event_regs(event_id,member_id,status,created_at,answers) VALUES(?,?,'registered',?,?)",
+                                 (e["id"], mid, now, json.dumps(ans, ensure_ascii=False)))
+                    db.audit(conn, None, "event_guest_register", f"member={code} event={e['id']}")
+            except LookupError:
+                _unlink(written)
+                return JSONResponse({"ok": False, "error": "Event tidak tersedia."}, status_code=404)
+            except sqlite3.IntegrityError:
+                _unlink(written)
+                if not conn.execute("SELECT 1 FROM members WHERE phone=? OR email_key=?", (clean["phone"], clean["email_key"])).fetchone():
+                    return JSONResponse({"ok": False, "error": "Terjadi kesalahan di server. Coba lagi."}, status_code=500)
+                return JSONResponse({"ok": False, "login": "/akun/masuk", "errors": {"phone": "Nomor HP atau email sudah terdaftar. Silakan masuk."}}, status_code=409)
+            except Exception:
+                _unlink(written)
                 return JSONResponse({"ok": False, "error": "Terjadi kesalahan di server. Coba lagi."}, status_code=500)
-            return JSONResponse({"ok": False, "login": "/akun/masuk", "errors": {"phone": "Nomor HP atau email sudah terdaftar. Silakan masuk."}}, status_code=409)
-        except Exception:
-            _unlink(written)
-            return JSONResponse({"ok": False, "error": "Terjadi kesalahan di server. Coba lagi."}, status_code=500)
         auth.drop_member_session(conn, s["token_hash"])
         t, _, ttl = auth.create_member_session(conn, secret_key, mid)
         resp = JSONResponse({"ok": True, "redirect": f"/event/{e['slug']}"})

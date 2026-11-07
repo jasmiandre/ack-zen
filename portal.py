@@ -1,5 +1,7 @@
 """ACK Stage 3: member portal (/akun). Every query is scoped by the session's member_id (no id from the client
 is trusted without an ownership join). Audit rows carry the member code only, never form values or paths."""
+import contextlib
+import fcntl
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -61,32 +63,56 @@ def reconcile_pending(conn, priv_dir, mid=None, limit=20):
     return done
 
 
-def reconcile_guest(conn, priv_dir, names=None, min_age_s=900, limit=20):
-    """Retry guest-upload cleanups. `names` (this request's own files) ignore age; the general retry only touches rows older
-    than min_age_s so an in-flight registration is never raced. Referenced files are never unlinked. Never raises."""
+@contextlib.contextmanager
+def guest_lock(priv_dir, exclusive=False, wait=True):
+    """Cross-process flock on a per-storage lock file beside priv_dir (not inside it). Registrations hold it SHARED from
+    before the staging intent through commit/cleanup; the general reconciler needs it EXCLUSIVE, so it can never see a
+    live upload as stale. The kernel drops it when the holder dies (crash-safe). Yields False if exclusive+not wait and busy."""
+    d = os.path.abspath(priv_dir)
+    fd = os.open(d.rstrip("/") + ".guest.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | (0 if wait else fcntl.LOCK_NB))
+        except BlockingIOError:
+            yield False
+            return
+        yield True
+    finally:
+        os.close(fd)
+
+
+def reconcile_guest(conn, priv_dir, names=None, limit=20):
+    """Retry guest-upload cleanups. `names` = this request's own files (caller already holds guest_lock shared). The general
+    retry takes the lock EXCLUSIVE without blocking and does nothing while any registration is in flight, so the
+    referenced-check + unlink cannot race a commit. Never raises."""
     done = 0
     try:
         if names is not None:
-            rows = [conn.execute("SELECT id,stored_path FROM pending_guest_files WHERE stored_path=?", (n,)).fetchone() for n in names]
-            rows = [r for r in rows if r]
-        else:
-            cut = (datetime.now(timezone.utc) - timedelta(seconds=min_age_s)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            rows = conn.execute("SELECT id,stored_path FROM pending_guest_files WHERE created_at<=? ORDER BY id LIMIT ?",
-                                (cut, limit)).fetchall()
-        for rid, path in rows:
-            try:
-                if register.FILE_RE.fullmatch(path) and not conn.execute(
-                        "SELECT 1 FROM member_files WHERE stored_path=?", (path,)).fetchone():
-                    try:
-                        os.unlink(os.path.join(priv_dir, path))
-                    except FileNotFoundError:
-                        pass
-                conn.execute("DELETE FROM pending_guest_files WHERE id=?", (rid,))
-                done += 1
-            except Exception as ex:
-                conn.execute("UPDATE pending_guest_files SET attempts=attempts+1,last_error=? WHERE id=?", (type(ex).__name__, rid))
+            return _guest_clean(conn, priv_dir, [r for r in (conn.execute(
+                "SELECT id,stored_path FROM pending_guest_files WHERE stored_path=?", (n,)).fetchone() for n in names) if r])
+        with guest_lock(priv_dir, True, False) as ok:
+            if ok:
+                done = _guest_clean(conn, priv_dir, conn.execute(
+                    "SELECT id,stored_path FROM pending_guest_files ORDER BY id LIMIT ?", (limit,)).fetchall())
     except Exception:
         pass
+    return done
+
+
+def _guest_clean(conn, priv_dir, rows):
+    done = 0
+    for rid, path in rows:
+        try:
+            if register.FILE_RE.fullmatch(path) and not conn.execute(
+                    "SELECT 1 FROM member_files WHERE stored_path=?", (path,)).fetchone():
+                try:
+                    os.unlink(os.path.join(priv_dir, path))
+                except FileNotFoundError:
+                    pass
+            conn.execute("DELETE FROM pending_guest_files WHERE id=?", (rid,))
+            done += 1
+        except Exception as ex:
+            conn.execute("UPDATE pending_guest_files SET attempts=attempts+1,last_error=? WHERE id=?", (type(ex).__name__, rid))
     return done
 
 
