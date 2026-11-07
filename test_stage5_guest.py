@@ -2,11 +2,13 @@
 import os
 import re
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 
 from fastapi.testclient import TestClient
 
 import events
+import portal
 import register
 import test_stage2 as t2
 import test_stage4_staff as t4
@@ -147,6 +149,104 @@ class G(t4.S):
         self.assertEqual(self.post().status_code, 500)
         self.assertEqual((self.cnt("members"), self.cnt("member_files")), (0, 0))
         self.assertEqual(os.listdir(self.priv), [])
+
+    # ---- durable guest file cleanup (pending_guest_files committed BEFORE write) ----
+    def gq(self):
+        return [r[0] for r in self.w.execute("SELECT stored_path FROM pending_guest_files ORDER BY id")]
+
+    def test_precommit_crash_leaves_tracked_orphans_then_retry(self):
+        real = register._write_private
+        calls = []
+
+        def crash(*a, **k):
+            calls.append(real(*a, **k))
+            raise RuntimeError("crash")   # process 'dies' after the first file hit disk; cleanup is disabled below
+        cl = TestClient(self.app, follow_redirects=False)
+        csrf = re.search(r'name="csrf_token" value="([^"]+)"', cl.get("/event/dinner-demo/tamu").text).group(1)
+        with mock.patch.object(register, "_write_private", crash), mock.patch.object(portal, "reconcile_guest"):   # no in-process cleanup = hard crash
+            self.assertEqual(self.post(cl=cl, csrf=csrf).status_code, 500)
+        self.assertEqual((self.cnt("members"), self.cnt("member_files"), self.cnt("event_regs")), (0, 0, 0))
+        self.assertEqual(len(self.gq()), 2)                       # intent survived the crash
+        self.assertIn(calls[0], os.listdir(self.priv))           # orphan exists but is tracked
+        self.assertEqual(portal.reconcile_guest(self.w, self.priv), 0)   # fresh rows: in-flight protection, not deleted yet
+        self.assertEqual(portal.reconcile_guest(self.w, self.priv, min_age_s=0), 2)
+        self.assertEqual((os.listdir(self.priv), self.gq()), ([], []))
+
+    def test_partial_write_and_unlink_failure_stay_queued(self):
+        real = register._write_private
+
+        def partial(d, data, ext, name=None):
+            real(d, data[:5], ext, name)
+            raise OSError("disk full")
+        with mock.patch.object(register, "_write_private", partial), mock.patch("portal.os.unlink", side_effect=PermissionError):
+            self.assertEqual(self.post().status_code, 500)
+        self.assertEqual(self.cnt("members"), 0)
+        self.assertEqual(len(self.gq()), 2)
+        self.assertEqual(self.w.execute("SELECT MIN(attempts) FROM pending_guest_files").fetchone()[0], 1)
+        self.assertEqual(len(os.listdir(self.priv)), 1)
+        self.assertEqual(portal.reconcile_guest(self.w, self.priv, min_age_s=0), 2)
+        self.assertEqual((os.listdir(self.priv), self.gq()), ([], []))
+
+    def test_rollback_unlink_failure_queued_then_retried(self):
+        self.w.execute("CREATE TRIGGER boom BEFORE INSERT ON event_regs BEGIN SELECT RAISE(ABORT,'x'); END")
+        with mock.patch("portal.os.unlink", side_effect=PermissionError):
+            self.assertEqual(self.post().status_code, 500)
+        self.assertEqual((self.cnt("members"), self.cnt("member_files"), self.cnt("event_regs")), (0, 0, 0))
+        self.assertEqual(len(self.gq()), 2)
+        self.assertEqual(len(os.listdir(self.priv)), 2)
+        self.assertEqual(self.w.execute("SELECT MIN(attempts) FROM pending_guest_files").fetchone()[0], 1)
+        portal.reconcile_guest(self.w, self.priv, min_age_s=0)
+        self.assertEqual((os.listdir(self.priv), self.gq()), ([], []))
+
+    def test_success_clears_queue_and_referenced_never_deleted(self):
+        self.assertEqual(self.post().status_code, 200)
+        self.assertEqual(self.gq(), [])
+        paths = [p for (p,) in self.w.execute("SELECT stored_path FROM member_files")]
+        for p in paths:   # even a stray queue row for a referenced file must not delete it
+            self.w.execute("INSERT INTO pending_guest_files(stored_path,created_at) VALUES(?,'2001-01-01T00:00:00Z')", (p,))
+        self.assertEqual(portal.reconcile_guest(self.w, self.priv, min_age_s=0), 2)
+        self.assertEqual(sorted(os.listdir(self.priv)), sorted(paths))
+        self.assertEqual(self.gq(), [])
+
+    def test_stale_retry_runs_on_next_registration(self):
+        self.w.execute("INSERT INTO pending_guest_files(stored_path,created_at) VALUES('%s','2001-01-01T00:00:00Z')" % ("a" * 32 + ".jpg"))
+        with open(os.path.join(self.priv, "a" * 32 + ".jpg"), "wb") as fh:
+            fh.write(b"x")
+        self.assertEqual(self.post().status_code, 200)
+        self.assertNotIn("a" * 32 + ".jpg", os.listdir(self.priv))
+        self.assertEqual(self.gq(), [])
+
+    # ---- guest KTP: approved -> 30-day Owner retention (boundary, button preview, durable unlink retry) ----
+    def test_guest_ktp_retention_boundary_button_and_unlink_retry(self):
+        self.assertEqual(self.post().status_code, 200)
+        mid = self.w.execute("SELECT id FROM members").fetchone()[0]
+        ver, own = self.staff("ver9", "verifier"), self.staff("own9", "owner")
+        allc = {"name": "1", "age": "1", "face": "1", "censor": "1"}
+        self.assertEqual(self.spost(ver, f"/verifikasi/{mid}/setuju", allc).status_code, 303)
+
+        def age(secs):
+            at = (datetime.now(timezone.utc) - timedelta(seconds=secs)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            self.w.execute("UPDATE verifications SET approved_at=? WHERE member_id=? AND kind='ktp'", (at, mid))
+        d = 86400
+        age(30 * d - 60)
+        page = own.get("/owner/ktp-retensi").text
+        self.assertNotIn(f"member {mid} /", page)
+        self.assertNotIn("Hapus batch", page)                 # no button before day 30
+        age(30 * d + 5)
+        page = own.get("/owner/ktp-retensi").text
+        self.assertIn(f"member {mid} /", page)
+        self.assertIn("Hapus batch", page)
+        f = self.w.execute("SELECT * FROM member_files WHERE kind='ktp_redacted'").fetchone()
+        path = os.path.join(self.priv, f["stored_path"])
+        self.assertTrue(os.path.exists(path))                  # GET never deletes
+        self.assertEqual(self.spost(own, "/owner/ktp-retensi/hapus", {"confirm": "x"}).status_code, 400)
+        with mock.patch("portal.os.unlink", side_effect=PermissionError):
+            self.assertEqual(self.spost(own, "/owner/ktp-retensi/hapus", {"confirm": "HAPUS"}).status_code, 200)
+        self.assertEqual(self.w.execute("SELECT COUNT(*) FROM pending_file_cleanup").fetchone()[0], 1)   # durable, still queued
+        self.assertTrue(os.path.exists(path))
+        self.assertEqual(portal.reconcile_pending(self.w, self.priv), 1)
+        self.assertFalse(os.path.exists(path))
+        self.assertEqual(self.w.execute("SELECT status FROM verifications WHERE member_id=? AND kind='ktp'", (mid,)).fetchone()[0], "approved")
 
     def test_stage2_register_unchanged_and_form_link(self):
         self.assertIn("/event/dinner-demo/tamu", TestClient(self.app).get("/event/dinner-demo").text)

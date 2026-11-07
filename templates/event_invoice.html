@@ -15,6 +15,9 @@ Nominal: {{ ('Rp %s' % '{:,}'.format(r.locked_price_idr).replace(',', '.')) if r
 {% elif r.status == 'proof_uploaded' %}<p>Bukti diterima; menunggu verifikasi Finance.</p>
 {% elif r.status in ('paid', 'checked_in') %}<p>{{ 'Sudah check-in.' if r.status == 'checked_in' else 'Pembayaran terverifikasi.' }}</p>
 <p>Tiket QR (tunjukkan ke staf di pintu masuk; jangan dibagikan atau dipublikasikan):</p>
-<img src="/akun/event/{{ r.id }}/tiket.svg" alt="Kode QR tiket check-in" width="240" height="240">{% endif %}
+<img src="/akun/event/{{ r.id }}/tiket.svg" alt="Kode QR tiket check-in" width="240" height="240">
+<p><button type="button" id="showcode" data-url="/akun/event/{{ r.id }}/kode">Tampilkan kode check-in (jika QR tidak terbaca)</button></p>
+<p id="codebox" hidden><input id="code" type="text" readonly size="36" aria-label="Kode check-in" autocomplete="off" spellcheck="false"> <button type="button" id="copycode">Salin</button> <span id="codemsg" role="status"></span></p>
+<script src="/static/js/ticketcode.js" defer></script>{% endif %}
 <p><a href="/event/{{ r.slug }}">Kembali ke event</a></p>
 {% endblock %}

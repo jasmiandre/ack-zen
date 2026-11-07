@@ -129,6 +129,9 @@ CREATE TABLE IF NOT EXISTS pending_file_cleanup(   -- durable intent to unlink a
   member_id INTEGER NOT NULL REFERENCES members(id),
   stored_path TEXT NOT NULL UNIQUE, reason TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS pending_guest_files(   -- guest uploads have no member yet (so no FK): staged+committed BEFORE the write, dropped in the registration tx
+  id INTEGER PRIMARY KEY, stored_path TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS app_settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS audit_log(
   id INTEGER PRIMARY KEY, ts TEXT NOT NULL,

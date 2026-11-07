@@ -478,13 +478,19 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet=None, priv_dir=None
         if conn.execute("SELECT 1 FROM members WHERE phone=? OR email_key=?", (clean["phone"], clean["email_key"])).fetchone():
             # never attach to / take over an existing account: tell them to log in
             return JSONResponse({"ok": False, "login": "/akun/masuk", "errors": {"phone": "Nomor HP atau email sudah terdaftar. Silakan masuk, lalu daftar event dari akun Anda."}}, status_code=409)
+        portal.reconcile_guest(conn, priv_dir)   # bounded explicit retry of stale leftovers (no cron)
         written = []
         try:
             stored = {}
+            names = {slot: (secrets.token_hex(16) + (".enc" if slot == "ktp_redacted" else ".jpg")) for slot in imgs}
+            with db.tx(conn):   # intent is COMMITTED before any byte is written: a hard crash can only leave a tracked row
+                for n in names.values():
+                    conn.execute("INSERT INTO pending_guest_files(stored_path,created_at) VALUES(?,?)", (n, db.now_iso()))
+            written = list(names.values())
             for slot, data in imgs.items():
                 enc = slot == "ktp_redacted"
-                written.append(register._write_private(priv_dir, fernet.encrypt(data) if enc else data, ".enc" if enc else ".jpg"))
-                stored[slot] = (written[-1], int(enc))
+                register._write_private(priv_dir, fernet.encrypt(data) if enc else data, ".enc" if enc else ".jpg", names[slot])
+                stored[slot] = (names[slot], int(enc))
             pw_hash = auth.hash_password(clean["password"])
             now = db.now_iso()
             with db.tx(conn):   # member + files + event reg commit or roll back together
@@ -499,6 +505,7 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet=None, priv_dir=None
                 for slot, (name, enc) in stored.items():
                     conn.execute("INSERT INTO member_files(member_id,kind,stored_path,created_at,encrypted) VALUES(?,?,?,?,?)",
                                  (mid, slot, name, now, enc))
+                    conn.execute("DELETE FROM pending_guest_files WHERE stored_path=?", (name,))   # now referenced
                 conn.execute("INSERT INTO event_regs(event_id,member_id,status,created_at,answers) VALUES(?,?,'registered',?,?)",
                              (e["id"], mid, now, json.dumps(ans, ensure_ascii=False)))
                 db.audit(conn, None, "event_guest_register", f"member={code} event={e['id']}")
@@ -511,7 +518,7 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet=None, priv_dir=None
                 return JSONResponse({"ok": False, "error": "Terjadi kesalahan di server. Coba lagi."}, status_code=500)
             return JSONResponse({"ok": False, "login": "/akun/masuk", "errors": {"phone": "Nomor HP atau email sudah terdaftar. Silakan masuk."}}, status_code=409)
         except Exception:
-            _unlink(written)   # ponytail: a hard crash between write and commit leaves an untracked orphan; add a startup sweep of unreferenced files if that matters
+            _unlink(written)
             return JSONResponse({"ok": False, "error": "Terjadi kesalahan di server. Coba lagi."}, status_code=500)
         auth.drop_member_session(conn, s["token_hash"])
         t, _, ttl = auth.create_member_session(conn, secret_key, mid)
@@ -519,12 +526,8 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet=None, priv_dir=None
         resp.set_cookie(auth.MEMBER_COOKIE, t, max_age=ttl, httponly=True, samesite="lax", secure=cookie_secure, path="/")
         return resp
 
-    def _unlink(names):
-        for n in names:
-            try:
-                os.unlink(os.path.join(priv_dir, n))
-            except OSError:
-                pass
+    def _unlink(names):   # durable: failures stay queued in pending_guest_files for the next explicit retry
+        portal.reconcile_guest(conn, priv_dir, names)
 
     # ---- Stage 5 chunk 2: payment proof (member) + finance verification ---------
     # Files follow the portal pattern: pending_file_cleanup row BEFORE the write, dropped in the tx that references
@@ -680,6 +683,23 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet=None, priv_dir=None
     # ponytail: token stored plaintext so the ticket can be re-rendered; hash+re-issue if DB read-leak is in scope.
     NO_STORE = {"Cache-Control": "no-store"}
 
+    def reg_token(r):
+        tok = r["qr_token"]
+        if not tok:
+            with db.tx(conn):   # first writer wins; everyone re-reads the persisted value
+                conn.execute("UPDATE event_regs SET qr_token=? WHERE id=? AND qr_token IS NULL AND status IN ('paid','checked_in')",
+                             (secrets.token_urlsafe(24), r["id"]))
+            tok = conn.execute("SELECT qr_token FROM event_regs WHERE id=?", (r["id"],)).fetchone()[0]
+        return tok
+
+    @app.get("/akun/event/{rid}/kode")   # manual fallback: only on explicit "Tampilkan", owner + paid/checked_in, no-store, never in a URL/log
+    async def ev_code(request: Request, rid: str):
+        s = member_sess(request)
+        r = own_reg(s, rid) if s else None
+        if not r or r["status"] not in ("paid", "checked_in"):
+            return PlainTextResponse("Not found", status_code=404, headers=NO_STORE)
+        return PlainTextResponse(reg_token(r), headers=NO_STORE)
+
     @app.get("/akun/event/{rid}/tiket.svg")
     async def ev_ticket(request: Request, rid: str):
         s = member_sess(request)
@@ -688,12 +708,7 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet=None, priv_dir=None
         r = own_reg(s, rid)
         if not r or r["status"] not in ("paid", "checked_in"):
             return PlainTextResponse("Not found", status_code=404, headers=NO_STORE)
-        tok = r["qr_token"]
-        if not tok:
-            with db.tx(conn):   # first writer wins; everyone re-reads the persisted value
-                conn.execute("UPDATE event_regs SET qr_token=? WHERE id=? AND qr_token IS NULL AND status IN ('paid','checked_in')",
-                             (secrets.token_urlsafe(24), r["id"]))
-            tok = conn.execute("SELECT qr_token FROM event_regs WHERE id=?", (r["id"],)).fetchone()[0]
+        tok = reg_token(r)
         buf = io.BytesIO()
         segno.make(tok, error="m", micro=False).save(buf, kind="svg", scale=6, border=4, xmldecl=False, svgns=True)
         return Response(buf.getvalue(), media_type="image/svg+xml", headers=NO_STORE)

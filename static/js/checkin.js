@@ -26,7 +26,8 @@
     var t = form.token.value; form.token.value = ''; send(t);
   });
   start.addEventListener('click', function () {
-    var det = new BarcodeDetector({ formats: ['qr_code'] });
+    var det;
+    try { det = new BarcodeDetector({ formats: ['qr_code'] }); } catch (e) { note.textContent = 'Pemindai tidak tersedia. Gunakan entri manual.'; return; }
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }).then(function (s) {
       stream = s; video.srcObject = s; video.play(); cam.hidden = false; start.hidden = true;
       timer = setInterval(function () {

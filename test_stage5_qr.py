@@ -1,5 +1,7 @@
 """ACK Stage 5 chunk 3: QR ticket + staff check-in. Synthetic data only. No QR decoder (zbar/cv2) on the box: SVG is checked structurally."""
 import threading
+
+from fastapi.testclient import TestClient
 import unittest
 
 import test_stage5_event as t5
@@ -47,6 +49,30 @@ class QR(t5.E):
         self.assertEqual(self.c.get(f"/akun/event/{rid}/tiket.svg").status_code, 404)   # anonymous
         self.assertEqual(self.ticket(cl, "abc").status_code, 404)
         self.assertIn("tiket.svg", cl.get(f"/akun/event/{rid}").text)
+
+    def test_manual_code_reveal_fallback(self):
+        cl, mid, rid = self.paid()
+        page = cl.get(f"/akun/event/{rid}").text
+        self.assertIn('id="showcode"', page)
+        self.assertIn(f'/akun/event/{rid}/kode', page)      # URL has no token
+        r = cl.get(f"/akun/event/{rid}/kode")
+        self.assertEqual((r.status_code, r.headers["cache-control"]), (200, "no-store"))
+        tok = self.qr(rid)
+        self.assertEqual(r.text, tok)
+        self.assertNotIn(tok, page)                          # never rendered until explicit click
+        self.assertEqual(self.scan(self.ev, r.text).status_code, 200)   # the revealed code actually checks in
+        other, _, _ = self.paid("Perempuan")
+        self.assertEqual(other.get(f"/akun/event/{rid}/kode").status_code, 404)    # owner only
+        self.assertEqual(TestClient(self.app).get(f"/akun/event/{rid}/kode").status_code, 404)
+        self.w.execute("UPDATE event_regs SET status='selected' WHERE id=?", (rid,))
+        self.assertEqual(cl.get(f"/akun/event/{rid}/kode").status_code, 404)    # not paid
+
+    def test_checkin_manual_form_and_scripts_served(self):
+        cl, mid, rid = self.paid()
+        page = self.ev.get(f"/staff/event/{self.e}/checkin").text
+        self.assertIn('id="token"', page)
+        self.assertIn('id="manual"', page)
+        self.assertEqual(TestClient(self.app).get("/static/js/ticketcode.js").status_code, 200)
 
     def test_checkin_once_idempotent_and_audit_clean(self):
         cl, mid, rid = self.paid()

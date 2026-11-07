@@ -2,7 +2,7 @@
 is trusted without an ownership join). Audit rows carry the member code only, never form values or paths."""
 import os
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -58,6 +58,35 @@ def reconcile_pending(conn, priv_dir, mid=None, limit=20):
                              (type(ex).__name__, rid))
     except Exception:
         pass   # table/DB trouble: rows stay for the next explicit call
+    return done
+
+
+def reconcile_guest(conn, priv_dir, names=None, min_age_s=900, limit=20):
+    """Retry guest-upload cleanups. `names` (this request's own files) ignore age; the general retry only touches rows older
+    than min_age_s so an in-flight registration is never raced. Referenced files are never unlinked. Never raises."""
+    done = 0
+    try:
+        if names is not None:
+            rows = [conn.execute("SELECT id,stored_path FROM pending_guest_files WHERE stored_path=?", (n,)).fetchone() for n in names]
+            rows = [r for r in rows if r]
+        else:
+            cut = (datetime.now(timezone.utc) - timedelta(seconds=min_age_s)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            rows = conn.execute("SELECT id,stored_path FROM pending_guest_files WHERE created_at<=? ORDER BY id LIMIT ?",
+                                (cut, limit)).fetchall()
+        for rid, path in rows:
+            try:
+                if register.FILE_RE.fullmatch(path) and not conn.execute(
+                        "SELECT 1 FROM member_files WHERE stored_path=?", (path,)).fetchone():
+                    try:
+                        os.unlink(os.path.join(priv_dir, path))
+                    except FileNotFoundError:
+                        pass
+                conn.execute("DELETE FROM pending_guest_files WHERE id=?", (rid,))
+                done += 1
+            except Exception as ex:
+                conn.execute("UPDATE pending_guest_files SET attempts=attempts+1,last_error=? WHERE id=?", (type(ex).__name__, rid))
+    except Exception:
+        pass
     return done
 
 
