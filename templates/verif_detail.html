@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Verifikasi {{ m.code }}</h1>
+<p>Nama: {{ m.full_name }} | Usia: {{ age }} | Status: {{ m.status }} | Domisili: {{ m.domicile }}</p>
+<div style="display:flex;gap:1rem;flex-wrap:wrap">
+<figure><img src="/verifikasi/{{ m.id }}/berkas/ktp_redacted" alt="KTP tersensor" width="320"><figcaption>KTP (sensor)</figcaption></figure>
+<figure><img src="/verifikasi/{{ m.id }}/berkas/photo_face" alt="Foto wajah" width="320"><figcaption>Foto wajah</figcaption></figure>
+<figure><img src="/verifikasi/{{ m.id }}/berkas/photo_body" alt="Foto badan" width="320"><figcaption>Foto badan</figcaption></figure>
+</div>
+{% if m.status == 'pending' %}
+<form method="post" action="/verifikasi/{{ m.id }}/setuju"><input type="hidden" name="csrf_token" value="{{ csrf }}">
+{% for k, label in checks %}<p><label><input type="checkbox" name="{{ k }}" value="1" required> {{ label }}</label></p>{% endfor %}
+<button>Setujui</button></form>
+<form method="post" action="/verifikasi/{{ m.id }}/tolak"><input type="hidden" name="csrf_token" value="{{ csrf }}">
+<label for="rs">Alasan tolak</label><input id="rs" type="text" name="reason" required maxlength="300"><button>Tolak</button></form>
+{% endif %}
+{% endblock %}

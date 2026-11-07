@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Retensi KTP</h1>
+{% if msg %}<p role="status">{{ msg }}</p>{% endif %}
+<p>Berkas KTP disimpan {{ days }} hari sejak disetujui. Jatuh tempo: {{ count }} (antrean pembersihan tertunda: {{ pending }}).</p>
+<form method="post" action="/owner/ktp-retensi/hari"><input type="hidden" name="csrf_token" value="{{ csrf }}">
+<label for="d">Retensi (hari)</label><input id="d" type="text" inputmode="numeric" name="days" value="{{ days }}"><button>Simpan</button></form>
+{% if ids %}<p>Batch berikutnya (maks {{ batch }}):</p><ul>{% for r in ids %}<li>member {{ r.member_id }} / berkas {{ r.file_id }}</li>{% endfor %}</ul>
+<form method="post" action="/owner/ktp-retensi/hapus"><input type="hidden" name="csrf_token" value="{{ csrf }}">
+<label for="c">Ketik HAPUS untuk menghapus file KTP batch ini</label><input id="c" type="text" name="confirm" autocomplete="off"><button>Hapus batch</button></form>{% endif %}
+{% endblock %}

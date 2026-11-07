@@ -19,3 +19,7 @@ Tidak mengakses domain/sosmed/logo/telepon ACK asli. BANK_INFO & WA_ADMIN kosong
 
 ## Hasil Tahap 0
 Lihat laporan akhir (tes, URL, screen, manifest). Evidence: evidence/.
+
+## Stage 4: verification queue + KTP retention
+- /verifikasi (verifier+owner; finance only if also verifier): KTP/face/body side by side; approve needs 4 checks, reject needs reason. approved_at = review time. Payments/subscriptions untouched. KTP opens audited as member+file IDs.
+- /owner/ktp-retensi (Owner): GET reads only. POST /hari sets ktp_retention_days (1-3650, default 30); POST /hapus needs confirm=HAPUS, max 20 approved KTP files >= N days old per click; DB tx drops member_files + queues pending_file_cleanup, then post-commit portal.reconcile_pending. Verification rows kept. No cron/onload.

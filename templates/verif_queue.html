@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Antrean verifikasi</h1>
+{% if not rows %}<p>Tidak ada member menunggu verifikasi.</p>{% else %}
+<table><tr><th>Member</th><th>Nama</th><th>Usia</th><th>Status</th><th>Domisili</th><th></th></tr>
+{% for r in rows %}<tr><td>{{ r.code }}</td><td>{{ r.full_name }}</td><td>{{ r.age }}</td><td>{{ r.status }}</td><td>{{ r.domicile }}</td><td><a href="/verifikasi/{{ r.id }}">Periksa</a></td></tr>{% endfor %}
+</table>{% endif %}
+{% endblock %}
