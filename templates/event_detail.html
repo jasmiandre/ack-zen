@@ -3,7 +3,7 @@
 <h1>{{ e.title }}</h1>
 {% if msg %}<p role="alert">{{ msg }}</p>{% endif %}
 <p>/event/{{ e.slug }} &middot; {{ e.starts_at }} - {{ e.ends_at }} &middot; {{ e.location or '-' }} &middot; <a href="/staff/event/{{ e.id }}/ubah">Ubah</a></p>
-<p><a href="/staff/event/{{ e.id }}/checkin">Scanner check-in</a></p>
+<p><a href="/staff/event/{{ e.id }}/checkin">Scanner check-in</a> | <a href="/staff/event/{{ e.id }}/pasangan">Pasangan ronde</a></p>
 <p>Harga: {{ e.price_idr if e.price_idr is not none else 'belum ditetapkan' }}. Kursi terpakai: {{ held.total }} / {{ e.capacity if e.capacity is not none else '?' }};
 L {{ held['Laki-laki'] }} / {{ e.quota_m if e.quota_m is not none else '?' }}; P {{ held['Perempuan'] }} / {{ e.quota_f if e.quota_f is not none else '?' }}.</p>
 <div class="tw"><table><tr><th>Member</th><th>Gender</th><th>Status</th><th>Jawaban</th><th></th></tr>

@@ -14,7 +14,7 @@ ROLES = ("owner", "finance", "verifier", "matchmaker", "event")
 ROLE_LABEL = {"owner": "Owner", "finance": "Admin Keuangan", "verifier": "Verifikator",
               "matchmaker": "Matchmaker", "event": "Event"}
 MIN_AGE = 18
-SCHEMA_VERSION = 9   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal; v4 = pending_file_cleanup; v6 = introductions quota/outcome cols; v5 = Stage 4 staff cols + app_settings (all additive, idempotent)
+SCHEMA_VERSION = 10   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal; v4 = pending_file_cleanup; v6 = introductions quota/outcome cols; v5 = Stage 4 staff cols + app_settings (all additive, idempotent)
 KTP_RETENTION_DAYS_DEFAULT = 30   # seeded into app_settings; ID-photo retention counted from verification approved_at
 PAY_HOURS = int(os.environ["ACK_PAY_HOURS"]) if os.environ.get("ACK_PAY_HOURS", "").isdigit() else None  # invoice deadline in hours; None = not set (no approved source) -> due_at NULL, UI "belum ditetapkan"
 
@@ -236,6 +236,19 @@ V7_COLS = {"events": (("slug", "TEXT"), ("ends_at", "TEXT"), ("location", "TEXT"
 V8_COLS = {"event_regs": (("proof_file_id", "INTEGER"), ("proof_uploaded_at", "TEXT"), ("reject_reason", "TEXT"),
                           ("paid_at", "TEXT"), ("paid_by", "INTEGER"))}   # proof = member_files(kind='event_proof'); reject keeps it until replaced
 V9_COLS = {"event_regs": (("qr_token", "TEXT"), ("checked_in_at", "TEXT"), ("checked_in_by", "INTEGER"))}   # qr_token = random check-in credential, no PII
+V10_SQL = (   # additive: event pairing rounds, post-event picks, event-only mutual connections (never touches introductions/quota)
+    "CREATE TABLE IF NOT EXISTS event_pairings(id INTEGER PRIMARY KEY, event_id INTEGER NOT NULL REFERENCES events(id), "
+    "round_no INTEGER NOT NULL CHECK(round_no BETWEEN 1 AND 6), member_a INTEGER NOT NULL REFERENCES members(id), "
+    "member_b INTEGER REFERENCES members(id), created_by INTEGER, created_at TEXT NOT NULL, "
+    "CHECK(member_b IS NULL OR member_a<>member_b), UNIQUE(event_id,round_no,member_a))",   # member_b NULL = rest
+    "CREATE UNIQUE INDEX IF NOT EXISTS event_pairings_b_uq ON event_pairings(event_id,round_no,member_b) WHERE member_b IS NOT NULL",
+    "CREATE TABLE IF NOT EXISTS event_picks(id INTEGER PRIMARY KEY, event_id INTEGER NOT NULL REFERENCES events(id), "
+    "chooser_id INTEGER NOT NULL REFERENCES members(id), chosen_id INTEGER NOT NULL REFERENCES members(id), created_at TEXT NOT NULL, "
+    "CHECK(chooser_id<>chosen_id), UNIQUE(event_id,chooser_id,chosen_id))",
+    "CREATE TABLE IF NOT EXISTS event_connections(id INTEGER PRIMARY KEY, event_id INTEGER NOT NULL REFERENCES events(id), "
+    "member_a INTEGER NOT NULL REFERENCES members(id), member_b INTEGER NOT NULL REFERENCES members(id), "
+    "source TEXT NOT NULL DEFAULT 'event_mutual_pick', created_at TEXT NOT NULL, CHECK(member_a<member_b), UNIQUE(event_id,member_a,member_b))",
+)
 EVENT_REG_STATUS = "('registered','selected','proof_uploaded','paid','checked_in','cancelled')"
 FILE_COLS = (("encrypted", "INTEGER NOT NULL DEFAULT 0 CHECK(encrypted IN (0,1))"),)
 
@@ -260,6 +273,8 @@ def migrate(conn):
                          f"WHEN NEW.status NOT IN {EVENT_REG_STATUS} BEGIN SELECT RAISE(ABORT,'invalid event_regs.status'); END")
         conn.execute("INSERT OR IGNORE INTO app_settings(key,value) VALUES('ktp_retention_days',?)",
                      (str(KTP_RETENTION_DAYS_DEFAULT),))
+        for stmt in V10_SQL:
+            conn.execute(stmt)
         conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
 

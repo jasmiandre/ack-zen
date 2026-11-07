@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Pilihan setelah event: {{ e.title }}</h1>
+{% if msg %}<p role="alert">{{ msg }}</p>{% endif %}
+{% if not ended %}<p>Pilihan dibuka setelah event selesai.</p>
+{% else %}
+<p>Pilih peserta yang ingin Anda kenal. Kontak dibuka hanya jika pilihan saling cocok.</p>
+<form method="post" action="/akun/event/pilihan"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="event_id" value="{{ e.id }}">
+<label for="code">Kode peserta</label><input id="code" name="code" type="text" maxlength="40" list="cands" autocomplete="off" required>
+<datalist id="cands">{% for p in cands %}<option value="{{ p[1] }}">{% endfor %}</datalist>
+<p><button>Pilih</button></p></form>
+<p>Pilihan Anda: {{ mine|length }}</p>
+<h2>Koneksi saling cocok</h2>
+{% for c in conns %}<p>{{ c.full_name }} &middot; HP: {{ c.phone }} &middot; kode {{ c.code }}</p>{% else %}<p>Belum ada.</p>{% endfor %}
+{% endif %}
+<p><a href="/akun/event/{{ e.id }}/pilihan">Muat ulang</a></p>
+{% endblock %}

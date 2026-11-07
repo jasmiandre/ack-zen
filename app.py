@@ -21,6 +21,7 @@ import matching
 import pipeline
 import staff
 import ops
+import event_pairs
 import events
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -68,6 +69,7 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
     pipeline.mount(app, conn, jenv, secret_key, cookie_secure)
     matching.mount(app, conn, jenv, secret_key, cookie_secure)
     events.mount(app, conn, jenv, secret_key, cookie_secure, fernet, priv)
+    event_pairs.mount(app, conn, jenv, secret_key, cookie_secure)
 
     def page(request, name, status=200, sess=None, **ctx):
         html = jenv.get_template(name).render(

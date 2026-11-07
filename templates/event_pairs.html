@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Pasangan: {{ e.title }}</h1>
+{% if msg %}<p role="alert">{{ msg }}</p>{% endif %}
+<p>Peserta check-in: {{ ppl|length }}. <a href="/staff/event/{{ e.id }}">Kembali</a></p>
+<form method="post" action="/staff/event/{{ e.id }}/pasangan/pratinjau"><input type="hidden" name="csrf_token" value="{{ csrf }}">
+<label for="rounds">Jumlah ronde (1-{{ max_rounds }})</label><input id="rounds" name="rounds" type="number" min="1" max="{{ max_rounds }}" value="3" required>
+<p><button>Buat saran</button></p></form>
+{% if rounds %}
+<form method="post" action="/staff/event/{{ e.id }}/pasangan/simpan"><input type="hidden" name="csrf_token" value="{{ csrf }}">
+{% for pairs in rounds %}{% set n = loop.index %}<h2>Ronde {{ n }}</h2><div class="tw"><table><tr><th>Peserta A</th><th>Peserta B (kosong = istirahat)</th></tr>
+{% for a, b in pairs %}{% set i = loop.index0 %}<tr>
+{% if editable %}<td><select name="r{{ n }}_a_{{ i }}" aria-label="Ronde {{ n }} A">{% for p in ppl %}<option value="{{ p[0] }}" {{ 'selected' if p[0] == a }}>{{ p[1] }}</option>{% endfor %}</select></td>
+<td><select name="r{{ n }}_b_{{ i }}" aria-label="Ronde {{ n }} B"><option value="">istirahat</option>{% for p in ppl %}<option value="{{ p[0] }}" {{ 'selected' if p[0] == b }}>{{ p[1] }}</option>{% endfor %}</select></td>
+{% else %}<td>{{ label[a] }}</td><td>{{ label[b] if b else 'istirahat' }}</td>{% endif %}</tr>{% endfor %}</table></div>{% endfor %}
+{% if editable %}<p><button>Simpan pasangan</button></p>{% endif %}</form>
+{% endif %}
+{% endblock %}
