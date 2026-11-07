@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 import auth
 import db
+import matching
 import register
 
 STEPS = ("Pendaftaran", "Pembayaran", "Verifikasi", "Aktif", "Perkenalan")
@@ -303,10 +304,7 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet, priv_dir, bank_inf
             if choice not in ("tertarik", "tidak") or r["status"] != "proposed" or r[col]:
                 return dashboard(s, 400, "Pilihan tidak dapat diubah atau tidak valid.")
             with db.tx(conn):
-                conn.execute(f"UPDATE introductions SET {col}=? WHERE id=?", (choice, iid))
-                x = conn.execute("SELECT resp_a,resp_b FROM introductions WHERE id=?", (iid,)).fetchone()
-                new = "declined" if "tidak" in tuple(x) else "mutual" if x[0] == x[1] == "tertarik" else "proposed"
-                conn.execute("UPDATE introductions SET status=? WHERE id=?", (new, iid))
+                matching.apply_response(conn, iid, col, choice)
                 audit(me(s), "member_intro_response", f"intro={iid}")
             return RedirectResponse("/akun", 303)
         finally:

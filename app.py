@@ -17,6 +17,7 @@ import portal
 import register
 from register import BodyLimit
 import seed
+import matching
 import pipeline
 import staff
 
@@ -62,6 +63,7 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
     staff.mount(app, conn, jenv, secret_key, cookie_secure, Fernet(fernet_key.encode()) if fernet_key else None, priv)
 
     pipeline.mount(app, conn, jenv, secret_key, cookie_secure)
+    matching.mount(app, conn, jenv, secret_key, cookie_secure)
 
     def page(request, name, status=200, sess=None, **ctx):
         html = jenv.get_template(name).render(

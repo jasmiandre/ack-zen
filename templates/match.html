@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Kandidat untuk {{ subj.code }}</h1>
+{% if msg %}<p role="alert">{{ msg }}</p>{% endif %}
+{% if why %}<p>Member ini tidak dapat diusulkan: {{ why }}.</p>
+{% else %}<p>Sisa kuota (setelah usulan menunggu): {{ avail }}. Kuota terpakai hanya saat kedua pihak tertarik; tidak ada pengembalian.</p>
+<table><tr><th>Kode</th><th>Skor</th><th>Alasan</th><th></th></tr>
+{% for t in top %}<tr><td>{{ t.m.code }}</td><td>{{ t.score }}</td><td>{{ t.summary }}<ul>{% for r in t.reasons %}<li>{{ r }}</li>{% endfor %}</ul></td>
+<td><form method="post" action="/pasangan/{{ subj.id }}/usul"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="candidate" value="{{ t.m.id }}"><button>Usulkan</button></form></td></tr>
+{% else %}<tr><td colspan="4">Tidak ada kandidat yang memenuhi syarat.</td></tr>{% endfor %}</table>{% endif %}
+{% endblock %}

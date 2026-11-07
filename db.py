@@ -14,7 +14,7 @@ ROLES = ("owner", "finance", "verifier", "matchmaker", "event")
 ROLE_LABEL = {"owner": "Owner", "finance": "Admin Keuangan", "verifier": "Verifikator",
               "matchmaker": "Matchmaker", "event": "Event"}
 MIN_AGE = 18
-SCHEMA_VERSION = 5   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal; v4 = pending_file_cleanup; v5 = Stage 4 staff cols + app_settings (all additive, idempotent)
+SCHEMA_VERSION = 6   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal; v4 = pending_file_cleanup; v6 = introductions quota/outcome cols; v5 = Stage 4 staff cols + app_settings (all additive, idempotent)
 KTP_RETENTION_DAYS_DEFAULT = 30   # seeded into app_settings; ID-photo retention counted from verification approved_at
 PAY_HOURS = int(os.environ["ACK_PAY_HOURS"]) if os.environ.get("ACK_PAY_HOURS", "").isdigit() else None  # invoice deadline in hours; None = not set (no approved source) -> due_at NULL, UI "belum ditetapkan"
 
@@ -212,6 +212,10 @@ V3_COLS = {"payments": (("unique_code", "INTEGER CHECK(unique_code IS NULL OR un
 V5_COLS = {"subscriptions": (("starts_at", "TEXT"), ("ends_at", "TEXT")),          # set on payment approval; NULL = not started
            "members": (("pipeline", "TEXT"), ("internal_notes", "TEXT"), ("next_followup_at", "TEXT")),
            "verifications": (("approved_at", "TEXT"), ("checklist", "TEXT"))}      # checklist = JSON text
+V6_COLS = {"introductions": (("quota_tracked", "INTEGER NOT NULL DEFAULT 0 CHECK(quota_tracked IN (0,1))"),   # 0 = legacy Stage-3 row, never charged
+                             ("quota_consumed", "INTEGER NOT NULL DEFAULT 0 CHECK(quota_consumed IN (0,1))"),
+                             ("mutual_at", "TEXT"),
+                             ("outcome", "TEXT CHECK(outcome IS NULL OR outcome IN ('dinner_scheduled','berhasil','tidak_lanjut'))"))}
 FILE_COLS = (("encrypted", "INTEGER NOT NULL DEFAULT 0 CHECK(encrypted IN (0,1))"),)
 
 
@@ -219,7 +223,7 @@ def migrate(conn):
     if conn.execute("PRAGMA user_version").fetchone()[0] >= SCHEMA_VERSION:
         return
     with tx(conn):
-        for table, cols in (("members", MEMBER_COLS), ("member_files", FILE_COLS), *V3_COLS.items(), *V5_COLS.items()):
+        for table, cols in (("members", MEMBER_COLS), ("member_files", FILE_COLS), *V3_COLS.items(), *V5_COLS.items(), *V6_COLS.items()):
             have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
             for name, ddl in cols:
                 if name not in have:
