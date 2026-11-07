@@ -48,7 +48,7 @@ class V5(unittest.TestCase):
                 for t in ("members", "subscriptions", "verifications", "pending_file_cleanup")}
 
     def test_version(self):
-        self.assertEqual(db.SCHEMA_VERSION, 7)
+        self.assertEqual(db.SCHEMA_VERSION, 8)
 
     def test_v4_to_v5_preserves_rows(self):
         before = self.snap()
@@ -57,7 +57,7 @@ class V5(unittest.TestCase):
         db.init_db(self.c)
         for t, names in NEW.items():
             self.assertTrue(names <= cols(self.c, t))
-        self.assertEqual(self.c.execute("PRAGMA user_version").fetchone()[0], 7)
+        self.assertEqual(self.c.execute("PRAGMA user_version").fetchone()[0], 8)
         after = self.snap()
         for t, rows in before.items():     # old values intact; new cols NULL
             n = len(rows[0])
@@ -90,7 +90,7 @@ class V5(unittest.TestCase):
     def test_dryrun_leaves_original(self):
         self.c.close()
         raw = rb(self.path)
-        self.assertEqual(db.dryrun(self.path), 7)
+        self.assertEqual(db.dryrun(self.path), 8)
         c = sqlite3.connect(self.path)
         self.addCleanup(c.close)
         self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0], 4)
