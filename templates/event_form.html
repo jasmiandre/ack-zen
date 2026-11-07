@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>{{ 'Ubah' if e else 'Event baru' }}</h1>
+<form method="post" action="{{ '/staff/event/%d/ubah' % e.id if e else '/staff/event/baru' }}">
+<input type="hidden" name="csrf_token" value="{{ csrf }}">
+<label for="title">Judul</label><input id="title" type="text" name="title" maxlength="120" required value="{{ v.title or '' }}">
+<label for="slug">Slug (a-z 0-9 -)</label><input id="slug" type="text" name="slug" maxlength="60" required value="{{ v.slug or '' }}">
+<label for="starts_at">Mulai (YYYY-MM-DDTHH:MM)</label><input id="starts_at" type="text" name="starts_at" required value="{{ v.starts_at or '' }}">
+<label for="ends_at">Selesai (YYYY-MM-DDTHH:MM)</label><input id="ends_at" type="text" name="ends_at" required value="{{ v.ends_at or '' }}">
+<label for="location">Lokasi</label><input id="location" type="text" name="location" maxlength="200" value="{{ v.location or '' }}">
+<label for="dresscode">Dresscode</label><input id="dresscode" type="text" name="dresscode" maxlength="120" value="{{ v.dresscode or '' }}">
+<label for="description">Deskripsi</label><textarea id="description" name="description" rows="3" maxlength="2000" style="width:100%;box-sizing:border-box">{{ v.description or '' }}</textarea>
+<label for="price_idr">Harga IDR (kosong = belum ditetapkan; seleksi diblokir)</label><input id="price_idr" type="text" inputmode="numeric" name="price_idr" value="{{ v.price_idr if v.price_idr is not none else '' }}">
+<label for="capacity">Kapasitas (kosong = belum ditetapkan)</label><input id="capacity" type="text" inputmode="numeric" name="capacity" value="{{ v.capacity if v.capacity is not none else '' }}">
+<label for="quota_m">Kuota laki-laki (kosong = belum ditetapkan)</label><input id="quota_m" type="text" inputmode="numeric" name="quota_m" value="{{ v.quota_m if v.quota_m is not none else '' }}">
+<label for="quota_f">Kuota perempuan (kosong = belum ditetapkan)</label><input id="quota_f" type="text" inputmode="numeric" name="quota_f" value="{{ v.quota_f if v.quota_f is not none else '' }}">
+<label for="extra_fields">Pertanyaan tambahan (JSON: [{"key","label","type":"choice|text|bool","required","options"}])</label>
+<textarea id="extra_fields" name="extra_fields" rows="5" style="width:100%;box-sizing:border-box">{{ v.extra_fields or '[]' }}</textarea>
+<label><input type="checkbox" name="active" value="1" {{ 'checked' if v.active }}> Aktif (tampil di halaman publik)</label>
+<p><button>Simpan</button></p></form>
+{% endblock %}

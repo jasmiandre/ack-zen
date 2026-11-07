@@ -21,6 +21,7 @@ import matching
 import pipeline
 import staff
 import ops
+import events
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 USER_RE = re.compile(r"[a-z0-9._-]{3,32}")
@@ -66,6 +67,7 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
     ops.mount(app, conn, jenv, secret_key, cookie_secure, Fernet(fernet_key.encode()) if fernet_key else None, priv)
     pipeline.mount(app, conn, jenv, secret_key, cookie_secure)
     matching.mount(app, conn, jenv, secret_key, cookie_secure)
+    events.mount(app, conn, jenv, secret_key, cookie_secure)
 
     def page(request, name, status=200, sess=None, **ctx):
         html = jenv.get_template(name).render(

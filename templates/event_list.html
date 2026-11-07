@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Event</h1>
+<p><a href="/staff/event/baru">+ Event baru</a></p>
+<div class="tw"><table><tr><th>Judul</th><th>Mulai</th><th>Harga</th><th>Kapasitas</th><th>Aktif</th><th></th></tr>
+{% for e in events %}<tr><td>{{ e.title }}</td><td>{{ e.starts_at or '-' }}</td><td>{{ e.price_idr if e.price_idr is not none else 'belum ditetapkan' }}</td>
+<td>{{ e.capacity if e.capacity is not none else 'belum ditetapkan' }}</td><td>{{ 'ya' if e.active else 'tidak' }}</td>
+<td><a href="/staff/event/{{ e.id }}">Kelola</a></td></tr>
+{% else %}<tr><td colspan="6">Belum ada event.</td></tr>{% endfor %}</table></div>
+{% endblock %}

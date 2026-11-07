@@ -14,7 +14,7 @@ ROLES = ("owner", "finance", "verifier", "matchmaker", "event")
 ROLE_LABEL = {"owner": "Owner", "finance": "Admin Keuangan", "verifier": "Verifikator",
               "matchmaker": "Matchmaker", "event": "Event"}
 MIN_AGE = 18
-SCHEMA_VERSION = 6   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal; v4 = pending_file_cleanup; v6 = introductions quota/outcome cols; v5 = Stage 4 staff cols + app_settings (all additive, idempotent)
+SCHEMA_VERSION = 7   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal; v4 = pending_file_cleanup; v6 = introductions quota/outcome cols; v5 = Stage 4 staff cols + app_settings (all additive, idempotent)
 KTP_RETENTION_DAYS_DEFAULT = 30   # seeded into app_settings; ID-photo retention counted from verification approved_at
 PAY_HOURS = int(os.environ["ACK_PAY_HOURS"]) if os.environ.get("ACK_PAY_HOURS", "").isdigit() else None  # invoice deadline in hours; None = not set (no approved source) -> due_at NULL, UI "belum ditetapkan"
 
@@ -224,6 +224,13 @@ V6_COLS = {"introductions": (("quota_tracked", "INTEGER NOT NULL DEFAULT 0 CHECK
                              ("quota_consumed", "INTEGER NOT NULL DEFAULT 0 CHECK(quota_consumed IN (0,1))"),
                              ("mutual_at", "TEXT"),
                              ("outcome", "TEXT CHECK(outcome IS NULL OR outcome IN ('dinner_scheduled','berhasil','tidak_lanjut'))"))}
+V7_COLS = {"events": (("slug", "TEXT"), ("ends_at", "TEXT"), ("location", "TEXT"), ("dresscode", "TEXT"), ("description", "TEXT"),
+                      ("quota_m", "INTEGER CHECK(quota_m IS NULL OR quota_m>=0)"),    # NULL = unconfigured (blocks selection), never unlimited
+                      ("quota_f", "INTEGER CHECK(quota_f IS NULL OR quota_f>=0)"),
+                      ("extra_fields", "TEXT NOT NULL DEFAULT '[]'")),                # bounded JSON schema, validated in events.py
+           "event_regs": (("selected_at", "TEXT"), ("locked_price_idr", "INTEGER"), ("cancelled_at", "TEXT"),
+                          ("answers", "TEXT NOT NULL DEFAULT '{}'"))}
+EVENT_REG_STATUS = "('registered','selected','proof_uploaded','paid','checked_in','cancelled')"
 FILE_COLS = (("encrypted", "INTEGER NOT NULL DEFAULT 0 CHECK(encrypted IN (0,1))"),)
 
 
@@ -231,7 +238,7 @@ def migrate(conn):
     if conn.execute("PRAGMA user_version").fetchone()[0] >= SCHEMA_VERSION:
         return
     with tx(conn):
-        for table, cols in (("members", MEMBER_COLS), ("member_files", FILE_COLS), *V3_COLS.items(), *V5_COLS.items(), *V6_COLS.items()):
+        for table, cols in (("members", MEMBER_COLS), ("member_files", FILE_COLS), *V3_COLS.items(), *V5_COLS.items(), *V6_COLS.items(), *V7_COLS.items()):
             have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
             for name, ddl in cols:
                 if name not in have:
@@ -239,6 +246,11 @@ def migrate(conn):
         # race-proof uniqueness (NULLs, i.e. pre-Stage-2 rows, never collide)
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS members_phone_uq ON members(phone)")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS members_email_uq ON members(email_key)")
+        conn.execute("UPDATE events SET slug='event-'||id WHERE slug IS NULL")   # legacy rows stay reachable; NULL slugs never collide
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS events_slug_uq ON events(slug)")
+        for op, of in (("INSERT", ""), ("UPDATE", " OF status")):   # ALTER cannot add a CHECK to the old status column; triggers guard new writes only
+            conn.execute(f"CREATE TRIGGER IF NOT EXISTS event_regs_status_{op.lower()} BEFORE {op}{of} ON event_regs "
+                         f"WHEN NEW.status NOT IN {EVENT_REG_STATUS} BEGIN SELECT RAISE(ABORT,'invalid event_regs.status'); END")
         conn.execute("INSERT OR IGNORE INTO app_settings(key,value) VALUES('ktp_retention_days',?)",
                      (str(KTP_RETENTION_DAYS_DEFAULT),))
         conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")

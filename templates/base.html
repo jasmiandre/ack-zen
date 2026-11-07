@@ -25,6 +25,7 @@ input[type=checkbox],input[type=radio]{width:2.75rem;height:2.75rem;padding:0}
 <nav><a href="/dashboard">Dashboard</a>
 {% if 'finance' in sess.roles or 'owner' in sess.roles %} | <a href="/keuangan">Pembayaran</a>{% endif %}
 {% if 'matchmaker' in sess.roles or 'owner' in sess.roles %} | <a href="/anggota">Member</a> | <a href="/perkenalan">Perkenalan</a>{% endif %}
+{% if 'event' in sess.roles or 'owner' in sess.roles %} | <a href="/staff/event">Event</a>{% endif %}
 {% if 'verifier' in sess.roles or 'owner' in sess.roles %} | <a href="/verifikasi">Verifikasi</a>{% endif %}
 {% if 'owner' in sess.roles %} | <a href="/owner/ktp-retensi">Retensi KTP</a> | <a href="/owner/program">Program</a> | <a href="/owner/staff">Staff</a> | <a href="/owner/impor">Impor CSV</a> | <a href="/owner/audit">Audit</a>{% endif %}
 <form method="post" action="/logout" style="display:inline;float:right">
