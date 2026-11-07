@@ -17,7 +17,8 @@ table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;pad
 <main>
 {% if sess and sess.staff_id %}
 <nav><a href="/dashboard">Dashboard</a>
-{% if 'owner' in sess.roles %} | <a href="/owner/staff">Staff</a> | <a href="/owner/audit">Audit</a>{% endif %}
+{% if 'finance' in sess.roles or 'owner' in sess.roles %} | <a href="/keuangan">Pembayaran</a>{% endif %}
+{% if 'owner' in sess.roles %} | <a href="/owner/program">Program</a> | <a href="/owner/staff">Staff</a> | <a href="/owner/audit">Audit</a>{% endif %}
 <form method="post" action="/logout" style="display:inline;float:right">
 <input type="hidden" name="csrf_token" value="{{ csrf }}"><button>Keluar ({{ sess.username }})</button></form></nav>
 {% endif %}

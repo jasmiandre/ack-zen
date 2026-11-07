@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Konfigurasi program</h1>
+<p>Kosong = belum diatur (harga kosong bukan gratis; isi 0 untuk gratis). Persetujuan pembayaran diblokir bila durasi kosong.</p>
+{% for r in rows %}<form method="post" action="/owner/program/{{ r.id }}">
+<input type="hidden" name="csrf_token" value="{{ csrf }}"><h2>{{ r.name }}</h2>
+<label for="p{{ r.id }}">Harga (IDR)</label><input id="p{{ r.id }}" type="text" inputmode="numeric" name="price_idr" value="{{ '' if r.price_idr is none else r.price_idr }}">
+<label for="d{{ r.id }}">Durasi (hari)</label><input id="d{{ r.id }}" type="text" inputmode="numeric" name="duration_days" value="{{ '' if r.duration_days is none else r.duration_days }}">
+<label for="q{{ r.id }}">Kuota perkenalan (0 = tidak ada)</label><input id="q{{ r.id }}" type="text" inputmode="numeric" name="intro_quota" value="{{ '' if r.intro_quota is none else r.intro_quota }}">
+<p><button>Simpan</button></p></form>{% endfor %}
+{% endblock %}

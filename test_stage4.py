@@ -41,7 +41,7 @@ class V5(unittest.TestCase):
         c.execute("INSERT INTO verifications(member_id,kind,created_at) VALUES(?,'ktp','t')", (mid,))
         c.execute("INSERT INTO pending_file_cleanup(member_id,stored_path,created_at) VALUES(?,'x/y','t')", (mid,))
         self.c = c
-        self.addCleanup(c.close)
+        self.addCleanup(lambda: self.c.close())   # self.c is rebound by test_dryrun; close whichever is current
 
     def snap(self):
         return {t: [tuple(r) for r in self.c.execute(f"SELECT * FROM {t} ORDER BY id")]

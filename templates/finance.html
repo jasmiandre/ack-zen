@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Antrean pembayaran</h1>
+{% if not rows %}<p>Tidak ada pembayaran menunggu.</p>{% else %}
+<table><tr><th>Invoice</th><th>Member</th><th>Program</th><th>Nominal</th><th>Bukti</th><th>Aksi</th></tr>
+{% for r in rows %}<tr><td>{{ r.invoice_code }}</td><td>{{ r.code }}</td><td>{{ r.name }}{% if not r.duration_days %} (durasi belum diatur){% endif %}</td>
+<td>{{ 'belum ditetapkan' if r.amount_idr is none else label(r.amount_idr) }}</td>
+<td>{% if r.proof_file_id %}<a href="/keuangan/{{ r.id }}/bukti" target="_blank" rel="noopener">Lihat</a>{% else %}belum ada{% endif %}</td>
+<td>{% if r.proof_file_id %}<form method="post" action="/keuangan/{{ r.id }}/setuju"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button>Setujui</button></form>
+<form method="post" action="/keuangan/{{ r.id }}/tolak"><input type="hidden" name="csrf_token" value="{{ csrf }}">
+<label for="rs{{ r.id }}">Alasan tolak</label><input id="rs{{ r.id }}" type="text" name="reason" required maxlength="300"><button>Tolak</button></form>{% endif %}</td></tr>{% endfor %}
+</table>{% endif %}
+{% endblock %}
