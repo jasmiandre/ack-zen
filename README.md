@@ -212,7 +212,7 @@ venv/bin/python -W error::ResourceWarning -m unittest -q test_stage0 test_stage1
 - Pipeline retensi KTP: tombol Owner saja, batch 20, usia >30 hari; tanpa cleanup lewat GET dan tanpa cron.
 - Audit: halaman 50 baris (`LIMIT 50 OFFSET`).
 - Keputusan bisnis: durasi program `NULL` = blok kuota; mutual-once `NULL` = tidak diketahui, `0` = tidak ada.
-- Migrasi schema versi 6. Backup sebelum deploy (`data/ack.db.bak-pre-*`, chmod 600); rollback: hentikan service, salin balik backup ke `data/ack.db`. Jangan reset DB secara buta; `uploads/` jangan dihapus.
+- Migrasi schema versi 6. Backup sebelum deploy (`data/ack.db.bak-pre-*`, chmod 600); rollback: hentikan service, salin balik backup ke `data/ack.db`. Jangan reset DB secara buta; `data/private/` jangan dihapus.
 - Tes: `venv/bin/python -m unittest` di remote (discovery otomatis). Tidak ada pip lokal.
 - UI staff: target sentuh >= 44px, teks tampil >= 16px, tanpa overflow di 390px.
 
@@ -224,5 +224,5 @@ venv/bin/python -W error::ResourceWarning -m unittest -q test_stage0 test_stage1
 
 ### Stage 5 selesai (QR, tamu, pairing event)
 
-- Scope: check-in QR dengan fallback manual (jsQR decode teruji di browser headless dengan DUMMY; kamera fisik BELUM diuji). Tamu tanpa langganan; privasi berkas tamu tahan lama lewat antrean `flock`. Pairing event: mutual, terpisah, dan EXEMPT dari kuota. Schema versi 10; 299 tes lulus (`-W error::ResourceWarning`). Seluruh data uji DUMMY.
-- Rollback (koreksi): baseline kode `db4bd2fbdfe60c444840b7a95df3c3ad3a85616e` (schema 6) + backup `data/ack.db.bak-pre-stage5-v6` (mode 600). Kode, DB, dan `uploads/` harus dikembalikan terkoordinasi; JANGAN restore DB secara buta setelah ada tulis baru. Release = arsip sumber dari commit Stage 5, bukan backup lama.
+- Scope: check-in QR dengan fallback manual (decode QR teruji dengan jsQR sebagai alat QA terpisah di `/home/zen/ack-tools` (bukan dependency aplikasi); scanner aplikasi memakai BarcodeDetector dengan fallback manual yang teruji. BarcodeDetector tidak tersedia pada browser QA; kamera fisik BELUM diuji; seluruh pengujian memakai DUMMY). Tamu tanpa langganan; privasi berkas tamu tahan lama lewat antrean `flock`. Pairing event: mutual, terpisah, dan EXEMPT dari kuota. Schema versi 10; 299 tes lulus (`-W error::ResourceWarning`). Seluruh data uji DUMMY.
+- Rollback (koreksi): baseline kode `db4bd2fbdfe60c444840b7a95df3c3ad3a85616e` (schema 6) + backup `data/ack.db.bak-pre-stage5-v6` (mode 600). Kode, DB, dan `data/private/` harus dikembalikan terkoordinasi; JANGAN restore DB secara buta setelah ada tulis baru. Release = arsip sumber dari commit Stage 5, bukan backup lama.
