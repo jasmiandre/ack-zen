@@ -14,7 +14,7 @@
 <label for="capacity">Kapasitas (kosong = belum ditetapkan)</label><input id="capacity" type="text" inputmode="numeric" name="capacity" value="{{ v.capacity if v.capacity is not none else '' }}">
 <label for="quota_m">Kuota laki-laki (kosong = belum ditetapkan)</label><input id="quota_m" type="text" inputmode="numeric" name="quota_m" value="{{ v.quota_m if v.quota_m is not none else '' }}">
 <label for="quota_f">Kuota perempuan (kosong = belum ditetapkan)</label><input id="quota_f" type="text" inputmode="numeric" name="quota_f" value="{{ v.quota_f if v.quota_f is not none else '' }}">
-<label for="extra_fields">Pertanyaan tambahan (JSON: [{"key","label","type":"choice|text|bool","required","options"}])</label>
+<label for="extra_fields" style="overflow-wrap:anywhere">Pertanyaan tambahan (JSON: [{"key","label","type":"choice|text|bool","required","options"}])</label>
 <textarea id="extra_fields" name="extra_fields" rows="5" style="width:100%;box-sizing:border-box">{{ v.extra_fields or '[]' }}</textarea>
 <label><input type="checkbox" name="active" value="1" {{ 'checked' if v.active }}> Aktif (tampil di halaman publik)</label>
 <p><button>Simpan</button></p></form>

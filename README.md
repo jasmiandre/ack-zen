@@ -221,3 +221,8 @@ venv/bin/python -W error::ResourceWarning -m unittest -q test_stage0 test_stage1
 - Schema v8 (additive): `event_regs.proof_file_id/proof_uploaded_at/reject_reason/paid_at/paid_by`. Bukti = `member_files(kind='event_proof')`, terenkripsi Fernet, pola `pending_file_cleanup` yang sama dengan portal.
 - Member pemilik: `/akun/event/{id}` (tagihan memakai `locked_price_idr`, tanpa rekening/jatuh tempo karangan) dan unggah `selected`->`proof_uploaded`. Finance/Owner: `/keuangan/event` (lihat bukti no-store, audit hanya ID, setujui sekali -> `paid`, tolak wajib alasan; kursi tetap `selected`, unggah ulang boleh).
 - Keputusan: TIDAK ada refund/pembatalan otomatis. Batal untuk `paid`/`checked_in` diblokir sampai kebijakan refund dikonfigurasi; tinjau manual. QR/tamu = chunk berikutnya.
+
+### Stage 5 selesai (QR, tamu, pairing event)
+
+- Scope: check-in QR dengan fallback manual (jsQR decode teruji di browser headless dengan DUMMY; kamera fisik BELUM diuji). Tamu tanpa langganan; privasi berkas tamu tahan lama lewat antrean `flock`. Pairing event: mutual, terpisah, dan EXEMPT dari kuota. Schema versi 10; 299 tes lulus (`-W error::ResourceWarning`). Seluruh data uji DUMMY.
+- Rollback (koreksi): baseline kode `db4bd2fbdfe60c444840b7a95df3c3ad3a85616e` (schema 6) + backup `data/ack.db.bak-pre-stage5-v6` (mode 600). Kode, DB, dan `uploads/` harus dikembalikan terkoordinasi; JANGAN restore DB secara buta setelah ada tulis baru. Release = arsip sumber dari commit Stage 5, bukan backup lama.
