@@ -13,7 +13,8 @@ ROLES = ("owner", "finance", "verifier", "matchmaker", "event")
 ROLE_LABEL = {"owner": "Owner", "finance": "Admin Keuangan", "verifier": "Verifikator",
               "matchmaker": "Matchmaker", "event": "Event"}
 MIN_AGE = 18
-SCHEMA_VERSION = 4   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal (additive, idempotent)
+SCHEMA_VERSION = 5   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal; v4 = pending_file_cleanup; v5 = Stage 4 staff cols + app_settings (all additive, idempotent)
+KTP_RETENTION_DAYS_DEFAULT = 30   # seeded into app_settings; ID-photo retention counted from verification approved_at
 PAY_HOURS = int(os.environ["ACK_PAY_HOURS"]) if os.environ.get("ACK_PAY_HOURS", "").isdigit() else None  # invoice deadline in hours; None = not set (no approved source) -> due_at NULL, UI "belum ditetapkan"
 
 SCHEMA = """
@@ -127,6 +128,7 @@ CREATE TABLE IF NOT EXISTS pending_file_cleanup(   -- durable intent to unlink a
   member_id INTEGER NOT NULL REFERENCES members(id),
   stored_path TEXT NOT NULL UNIQUE, reason TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS app_settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS audit_log(
   id INTEGER PRIMARY KEY, ts TEXT NOT NULL,
   staff_id INTEGER REFERENCES users_staff(id), action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '');
@@ -170,6 +172,9 @@ V3_COLS = {"payments": (("unique_code", "INTEGER CHECK(unique_code IS NULL OR un
            "introductions": (("resp_a", "TEXT CHECK(resp_a IS NULL OR resp_a IN ('tertarik','tidak'))"),
                              ("resp_b", "TEXT CHECK(resp_b IS NULL OR resp_b IN ('tertarik','tidak'))"),
                              ("match_reason", "TEXT"))}
+V5_COLS = {"subscriptions": (("starts_at", "TEXT"), ("ends_at", "TEXT")),          # set on payment approval; NULL = not started
+           "members": (("pipeline", "TEXT"), ("internal_notes", "TEXT"), ("next_followup_at", "TEXT")),
+           "verifications": (("approved_at", "TEXT"), ("checklist", "TEXT"))}      # checklist = JSON text
 FILE_COLS = (("encrypted", "INTEGER NOT NULL DEFAULT 0 CHECK(encrypted IN (0,1))"),)
 
 
@@ -177,7 +182,7 @@ def migrate(conn):
     if conn.execute("PRAGMA user_version").fetchone()[0] >= SCHEMA_VERSION:
         return
     with tx(conn):
-        for table, cols in (("members", MEMBER_COLS), ("member_files", FILE_COLS), *V3_COLS.items()):
+        for table, cols in (("members", MEMBER_COLS), ("member_files", FILE_COLS), *V3_COLS.items(), *V5_COLS.items()):
             have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
             for name, ddl in cols:
                 if name not in have:
@@ -185,6 +190,8 @@ def migrate(conn):
         # race-proof uniqueness (NULLs, i.e. pre-Stage-2 rows, never collide)
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS members_phone_uq ON members(phone)")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS members_email_uq ON members(email_key)")
+        conn.execute("INSERT OR IGNORE INTO app_settings(key,value) VALUES('ktp_retention_days',?)",
+                     (str(KTP_RETENTION_DAYS_DEFAULT),))
         conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
 
