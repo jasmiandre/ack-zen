@@ -65,3 +65,4 @@ capture*.sh
 /live_workflow_qa.py
 /stage4_playwright_qa.mjs
 /stage4_shots/
+/stage4_shots_v3/

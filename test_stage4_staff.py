@@ -1,6 +1,7 @@
 """ACK Stage 4 tests: finance payment queue + Owner program config. Synthetic data only."""
 import gc
 import os
+import pathlib
 import re
 import threading
 import unittest
@@ -261,7 +262,7 @@ class TestTableWrap(unittest.TestCase):
     def test_every_table_in_scroll_wrapper(self):
         import glob
         for f in glob.glob("templates/*.html"):
-            s = open(f).read()
+            s = pathlib.Path(f).read_text()
             self.assertEqual(s.count("<table>"), s.count("<div class=\"tw\"><table>"), f)
-        b = open("templates/base.html").read()
+        b = pathlib.Path("templates/base.html").read_text()
         self.assertIn(".tw{overflow-x:auto;max-width:100%;min-width:0}", b)
