@@ -5,12 +5,14 @@ Unknown (NULL) capacity / gender quota / price blocks selection (never treated a
 Payments, proof upload, check-in/QR and guest registration are later chunks.
 """
 import json
+import os
 import re
 import secrets
+import sqlite3
 from datetime import date, datetime
 
 from fastapi import Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 
 import auth
 import db
@@ -365,6 +367,161 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet=None, priv_dir=None
                 db.audit(conn, None, "event_register", f"member={m['code']} event={e['id']}")
         return public(request, slug, 200, "Pendaftaran diterima. Staf akan memilih peserta." if cur.rowcount
                       else "Anda sudah terdaftar; data pendaftaran tidak diubah.")
+
+    # ---- Stage 5 chunk 3: guest registration (normal participant member, NO subscription, registered != selected) ----
+    GUEST_SLOTS = ("ktp_redacted", "photo_face")   # face only: no body photo for guests
+    GUEST_STEP = ("ktp_nik_ok", "ktp_addr_ok", "ktp_sign_ok", "consent_terms", "consent_privacy", "consent_honest")
+
+    def guest_clean(f):
+        g = lambda k: f.get(k).strip() if isinstance(f.get(k), str) else ""
+        c, e = {}, {}
+        c["full_name"] = re.sub(r"\s+", " ", g("full_name"))
+        if not 2 <= len(c["full_name"]) <= 100:
+            e["full_name"] = "Nama lengkap 2-100 karakter."
+        c["phone"] = register.normalize_phone(g("phone"))
+        if not c["phone"]:
+            e["phone"] = "Nomor HP tidak valid (contoh 0812xxxxxxxx)."
+        c["email"] = g("email")
+        if len(c["email"]) > 254 or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", c["email"]):
+            e["email"] = "Email tidak valid."
+        c["email_key"] = c["email"].casefold()
+        pw = f.get("password") if isinstance(f.get("password"), str) else ""
+        c["password"] = pw
+        if not 12 <= len(pw) <= 256:
+            e["password"] = "Password 12-256 karakter."
+        if f.get("password2") != pw:
+            e["password2"] = "Konfirmasi password tidak sama."
+        c["gender"] = g("gender")
+        if c["gender"] not in register.GENDER:
+            e["gender"] = "Pilih gender."
+        try:   # full DOB, hard 18+ gate, same helpers as /daftar
+            born = db.parse_birth_date(g("birth_date"))
+            if not db.is_adult(born):
+                e["birth_date"] = f"Usia minimal {db.MIN_AGE} tahun."
+            c["birth_date"] = born.isoformat()
+        except ValueError as ex:
+            e["birth_date"] = str(ex).capitalize() + "."
+        for k in GUEST_STEP:
+            if g(k) != "on":
+                e[k] = "Wajib dicentang."
+        return c, e
+
+    def guest_page(request, slug, status=200):
+        e = conn.execute("SELECT * FROM events WHERE slug=? AND active=1", (slug,)).fetchone()
+        if not e:
+            return PlainTextResponse("Not found", status_code=404)
+        tok = request.cookies.get(auth.MEMBER_COOKIE)
+        s = auth.load_member_session(conn, secret_key, tok) if tok else None
+        fresh = None
+        if not s:
+            t, csrf, ttl = auth.create_member_session(conn, secret_key)
+            s, fresh = {"csrf": csrf}, (t, ttl)
+        r = render("public/event_tamu.html", status, None, s["csrf"], e=e, schema=json.loads(e["extra_fields"] or "[]"),
+                   gender=register.GENDER, max_mb=register.MAX_IMG // 1024 // 1024)
+        if fresh:
+            r.set_cookie(auth.MEMBER_COOKIE, fresh[0], max_age=fresh[1], httponly=True, samesite="lax", secure=cookie_secure, path="/")
+        return r
+
+    @app.get("/event/{slug}/tamu")
+    async def ev_guest_form(request: Request, slug: str):
+        return guest_page(request, slug)
+
+    def gerr(errors, status=400):
+        return JSONResponse({"ok": False, "errors": errors}, status_code=status)
+
+    @app.post("/event/tamu/submit")
+    async def ev_guest_submit(request: Request):
+        tok = request.cookies.get(auth.MEMBER_COOKIE)
+        s = auth.load_member_session(conn, secret_key, tok) if tok else None
+        if not auth.csrf_ok(s, request.headers.get("x-csrf-token") or ""):
+            return JSONResponse({"ok": False, "error": "Sesi kedaluwarsa. Muat ulang halaman."}, status_code=403)
+        if register._rate_limited(conn, register.client_ip(request)):
+            return JSONResponse({"ok": False, "error": "Terlalu banyak percobaan. Coba lagi nanti."}, status_code=429)
+        if fernet is None:
+            return JSONResponse({"ok": False, "error": "Penyimpanan aman belum dikonfigurasi."}, status_code=503)
+        try:
+            form = await request.form(max_files=len(GUEST_SLOTS) + 2, max_fields=40)
+        except Exception:
+            return JSONResponse({"ok": False, "error": "Permintaan tidak valid."}, status_code=400)
+        try:
+            return await guest_register(s, form)
+        finally:
+            await form.close()
+
+    async def guest_register(s, form):
+        text = {k: v for k, v in form.items() if isinstance(v, str)}
+        e = conn.execute("SELECT * FROM events WHERE slug=? AND active=1", (text.get("slug", ""),)).fetchone()
+        if not e:
+            return JSONResponse({"ok": False, "error": "Event tidak tersedia."}, status_code=404)
+        clean, errors = guest_clean(text)
+        ans, aerr = clean_answers(json.loads(e["extra_fields"] or "[]"), form)
+        if aerr:
+            errors["answers"] = aerr
+        ups = {k: v for k, v in form.items() if not isinstance(v, str)}
+        if any(k not in GUEST_SLOTS for k in ups):
+            errors["ktp_redacted"] = "Hanya hasil sensor KTP dan foto wajah yang boleh dikirim."
+        imgs = {}
+        for slot in GUEST_SLOTS:
+            up = ups.get(slot)
+            if up is None:
+                errors[slot] = "File wajib diunggah."
+                continue
+            try:
+                imgs[slot] = register.clean_image(await up.read(register.MAX_IMG + 1), up.filename, up.content_type)
+            except ValueError as ex:
+                errors[slot] = str(ex)
+        if errors:
+            return gerr(errors)
+        if conn.execute("SELECT 1 FROM members WHERE phone=? OR email_key=?", (clean["phone"], clean["email_key"])).fetchone():
+            # never attach to / take over an existing account: tell them to log in
+            return JSONResponse({"ok": False, "login": "/akun/masuk", "errors": {"phone": "Nomor HP atau email sudah terdaftar. Silakan masuk, lalu daftar event dari akun Anda."}}, status_code=409)
+        written = []
+        try:
+            stored = {}
+            for slot, data in imgs.items():
+                enc = slot == "ktp_redacted"
+                written.append(register._write_private(priv_dir, fernet.encrypt(data) if enc else data, ".enc" if enc else ".jpg"))
+                stored[slot] = (written[-1], int(enc))
+            pw_hash = auth.hash_password(clean["password"])
+            now = db.now_iso()
+            with db.tx(conn):   # member + files + event reg commit or roll back together
+                if not conn.execute("SELECT 1 FROM events WHERE id=? AND active=1", (e["id"],)).fetchone():
+                    raise LookupError
+                code = db.next_member_code(conn)
+                mid = conn.execute(
+                    "INSERT INTO members(code,full_name,birth_date,status,created_at,email,email_key,phone,password_hash,gender,consented_at) "
+                    "VALUES(?,?,?,'pending',?,?,?,?,?,?,?)",
+                    (code, clean["full_name"], clean["birth_date"], now, clean["email"], clean["email_key"], clean["phone"],
+                     pw_hash, clean["gender"], now)).lastrowid
+                for slot, (name, enc) in stored.items():
+                    conn.execute("INSERT INTO member_files(member_id,kind,stored_path,created_at,encrypted) VALUES(?,?,?,?,?)",
+                                 (mid, slot, name, now, enc))
+                conn.execute("INSERT INTO event_regs(event_id,member_id,status,created_at,answers) VALUES(?,?,'registered',?,?)",
+                             (e["id"], mid, now, json.dumps(ans, ensure_ascii=False)))
+                db.audit(conn, None, "event_guest_register", f"member={code} event={e['id']}")
+        except LookupError:
+            _unlink(written)
+            return JSONResponse({"ok": False, "error": "Event tidak tersedia."}, status_code=404)
+        except sqlite3.IntegrityError:
+            _unlink(written)
+            if not conn.execute("SELECT 1 FROM members WHERE phone=? OR email_key=?", (clean["phone"], clean["email_key"])).fetchone():
+                return JSONResponse({"ok": False, "error": "Terjadi kesalahan di server. Coba lagi."}, status_code=500)
+            return JSONResponse({"ok": False, "login": "/akun/masuk", "errors": {"phone": "Nomor HP atau email sudah terdaftar. Silakan masuk."}}, status_code=409)
+        except Exception:
+            _unlink(written)   # ponytail: a hard crash between write and commit leaves an untracked orphan; add a startup sweep of unreferenced files if that matters
+            return JSONResponse({"ok": False, "error": "Terjadi kesalahan di server. Coba lagi."}, status_code=500)
+        auth.drop_member_session(conn, s["token_hash"])
+        t, _, ttl = auth.create_member_session(conn, secret_key, mid)
+        resp = JSONResponse({"ok": True, "redirect": f"/event/{e['slug']}"})
+        resp.set_cookie(auth.MEMBER_COOKIE, t, max_age=ttl, httponly=True, samesite="lax", secure=cookie_secure, path="/")
+        return resp
+
+    def _unlink(names):
+        for n in names:
+            try:
+                os.unlink(os.path.join(priv_dir, n))
+            except OSError:
+                pass
 
     # ---- Stage 5 chunk 2: payment proof (member) + finance verification ---------
     # Files follow the portal pattern: pending_file_cleanup row BEFORE the write, dropped in the tx that references

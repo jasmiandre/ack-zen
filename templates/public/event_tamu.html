@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Daftar tamu — {{ e.title }}</title><meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="/static/css/daftar.css"></head>
+<body class="reg"><p class="notice" role="note"><strong>DATA DUMMY — prototipe demo.</strong> Jangan masukkan data pribadi asli.</p>
+{% if http_warning %}<p class="notice warn" role="alert">Sesi berjalan lewat HTTP tanpa enkripsi. Hanya untuk data dummy.</p>{% endif %}
+<header class="bar"><a href="/event/{{ e.slug }}" class="back">&larr; {{ e.title }}</a><a href="/akun/masuk">Sudah punya akun? Masuk</a></header>
+<main id="utama"><h1>Daftar sebagai tamu — {{ e.title }}</h1>
+<p class="lead">Tanpa langganan program. Pendaftaran bukan jaminan kursi; staf akan memilih peserta.</p>
+<noscript><p class="err">Formulir ini membutuhkan JavaScript (untuk menyensor KTP di browser sebelum dikirim).</p></noscript>
+<p id="formerr" class="err banner-err" role="alert"></p>
+<p id="login-link" hidden><a href="/akun/masuk">Akun sudah ada — masuk di sini</a></p>
+<form id="reg" novalidate autocomplete="off">
+<input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="slug" value="{{ e.slug }}">
+{% macro inp(name, label, type="text", extra="") %}<label for="{{ name }}">{{ label }}</label><input id="{{ name }}" name="{{ name }}" type="{{ type }}" required {{ extra|safe }}><p class="err" data-err="{{ name }}" role="alert"></p>{% endmacro %}
+{{ inp("full_name", "Nama lengkap", "text", 'maxlength="100" autocomplete="name"') }}
+{{ inp("phone", "No. HP", "tel", 'maxlength="20" autocomplete="tel"') }}
+{{ inp("email", "Email", "email", 'maxlength="254" autocomplete="email"') }}
+{{ inp("birth_date", "Tanggal lahir (lengkap, min. 18 tahun)", "date") }}
+<label for="gender">Gender</label><select id="gender" name="gender" required><option value="">Pilih…</option>{% for g in gender %}<option>{{ g }}</option>{% endfor %}</select><p class="err" data-err="gender" role="alert"></p>
+{{ inp("password", "Password (min. 12 karakter)", "password", 'minlength="12" maxlength="256" autocomplete="new-password"') }}
+{{ inp("password2", "Ulangi password", "password", 'maxlength="256" autocomplete="new-password"') }}
+{% for f in schema %}{% if f.type == 'bool' %}<label class="chk"><input type="checkbox" name="q_{{ f.key }}" value="ya"> {{ f.label }}{{ ' *' if f.required }}</label>
+{% elif f.type == 'choice' %}<label for="q_{{ f.key }}">{{ f.label }}{{ ' *' if f.required }}</label><select id="q_{{ f.key }}" name="q_{{ f.key }}"><option value="">-</option>{% for o in f.options %}<option>{{ o }}</option>{% endfor %}</select>
+{% else %}<label for="q_{{ f.key }}">{{ f.label }}{{ ' *' if f.required }}</label><input id="q_{{ f.key }}" type="text" name="q_{{ f.key }}" maxlength="300">
+{% endif %}{% endfor %}<p class="err" data-err="answers" role="alert"></p>
+<h2>Verifikasi</h2>
+<label for="ktp-src">Foto KTP (JPG/PNG/WEBP, maks {{ max_mb }} MB; HEIC dicoba dibaca browser)</label>
+<input id="ktp-src" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif">
+<p class="err" data-err="ktp_redacted" role="alert"></p>
+<div id="ktp-tools" hidden>
+<div class="stage" id="stage"><canvas id="ktp-canvas" aria-label="Foto KTP dengan kotak sensor"></canvas></div>
+<p class="hint">Kotak: seret untuk memindahkan, tarik sudut kanan-bawah untuk mengubah ukuran. Dengan keyboard: fokus ke kotak, panah = geser, Shift+panah = ubah ukuran.</p>
+<p class="tools"><button type="button" class="btn ghost" id="add-box">Tambah kotak sensor</button>
+<button type="button" class="btn" id="make-prev">Buat pratinjau hasil sensor</button></p>
+<div id="prev-wrap" hidden><p><strong>Pratinjau yang akan dikirim:</strong></p><img id="ktp-prev" alt="Pratinjau KTP yang sudah disensor"></div>
+<fieldset class="checks"><legend>Konfirmasi (aktif setelah pratinjau dibuat)</legend>
+<label class="chk"><input type="checkbox" name="ktp_nik_ok" disabled> NIK sudah tertutup</label>
+<label class="chk"><input type="checkbox" name="ktp_addr_ok" disabled> Alamat sudah tertutup</label>
+<label class="chk"><input type="checkbox" name="ktp_sign_ok" disabled> Tanda tangan sudah tertutup</label>
+</fieldset></div>
+<label for="photo_face">Foto wajah (JPG/PNG/WEBP, maks {{ max_mb }} MB)</label>
+<input id="photo_face" name="photo_face" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif">
+<p class="hint" data-note="photo_face"></p><p class="err" data-err="photo_face" role="alert"></p>
+<label class="chk"><input type="checkbox" name="consent_terms"> Setuju syarat &amp; ketentuan</label>
+<label class="chk"><input type="checkbox" name="consent_privacy"> Setuju kebijakan privasi</label>
+<label class="chk"><input type="checkbox" name="consent_honest"> Data yang saya isi benar</label>
+<p class="err" data-err="consent_terms consent_privacy consent_honest" role="alert"></p>
+<progress id="up-progress" max="100" hidden></progress><p id="up-status" aria-live="polite"></p>
+<div class="nav"><button class="btn" id="send">Kirim pendaftaran</button></div></form></main>
+<script src="/static/js/guest.js" defer></script></body></html>

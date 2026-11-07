@@ -99,7 +99,7 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
         if request.url.path == "/":  # public landing: pinned CDN allow-list; staff pages keep the tight CSP
             resp.headers["Cache-Control"] = "no-cache"
             resp.headers["Content-Security-Policy"] = landing.PUBLIC_CSP
-        elif request.url.path in ("/daftar", "/akun/masuk") or request.url.path.startswith("/akun") and not request.url.path.startswith("/akun/foto/"):  # self-hosted JS/CSS only; blob: preview of redacted KTP
+        elif request.url.path in ("/daftar", "/akun/masuk") or (request.url.path.startswith("/event/") and request.url.path.endswith("/tamu")) or request.url.path.startswith("/akun") and not request.url.path.startswith("/akun/foto/"):  # self-hosted JS/CSS only; blob: preview of redacted KTP
             resp.headers["Cache-Control"] = "no-store"
             resp.headers["Content-Security-Policy"] = ("default-src 'none'; script-src 'self'; style-src 'self'; "
                 "font-src 'self'; img-src 'self' blob: data:; connect-src 'self'; form-action 'self'; "
@@ -297,6 +297,6 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
 
     # raw ASGI wrapper: cap is enforced on received bytes before multipart parsing
     app.add_middleware(BodyLimit, path="/daftar/submit", limit=register.BODY_LIMIT)
-    for up in ("/akun/bayar/unggah", "/akun/verifikasi/unggah", "/akun/event/bukti"):
+    for up in ("/akun/bayar/unggah", "/akun/verifikasi/unggah", "/akun/event/bukti", "/event/tamu/submit"):
         app.add_middleware(BodyLimit, path=up, limit=register.BODY_LIMIT)
     return app

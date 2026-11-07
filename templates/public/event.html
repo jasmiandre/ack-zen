@@ -12,5 +12,5 @@ Harga: {{ ('Rp %s' % '{:,}'.format(e.price_idr).replace(',', '.')) if e.price_id
 {% else %}<label for="q_{{ f.key }}">{{ f.label }}{{ ' *' if f.required }}</label><input id="q_{{ f.key }}" type="text" name="q_{{ f.key }}" maxlength="300" value="{{ a.get('q_' ~ f.key, '') }}">
 {% endif %}{% endfor %}
 <p><button>Daftar event</button></p></form>
-{% else %}<p><a href="/akun/masuk">Masuk akun member</a> untuk mendaftar. Pendaftaran tamu belum tersedia.</p>{% endif %}
+{% else %}<p><a href="/akun/masuk">Masuk akun member</a> untuk mendaftar. Belum punya akun? <a href="/event/{{ e.slug }}/tamu">Daftar sebagai tamu</a> (tanpa langganan program).</p>{% endif %}
 {% endblock %}
