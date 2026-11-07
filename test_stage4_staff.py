@@ -255,3 +255,13 @@ class TestNoResourceWarning(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTableWrap(unittest.TestCase):
+    def test_every_table_in_scroll_wrapper(self):
+        import glob
+        for f in glob.glob("templates/*.html"):
+            s = open(f).read()
+            self.assertEqual(s.count("<table>"), s.count("<div class=\"tw\"><table>"), f)
+        b = open("templates/base.html").read()
+        self.assertIn(".tw{overflow-x:auto;max-width:100%;min-width:0}", b)

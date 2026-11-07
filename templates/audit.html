@@ -2,9 +2,9 @@
 {% block body %}
 <h1>Audit log</h1>
 <form method="get"><label for="a">Aksi</label> <select id="a" name="action"><option value="">(semua)</option>{% for x in actions %}<option{% if x == act %} selected{% endif %}>{{ x }}</option>{% endfor %}</select> <button>Filter</button></form>
-<table><tr><th>Waktu</th><th>Staff</th><th>Aksi</th><th>Detail</th></tr>
+<div class="tw"><table><tr><th>Waktu</th><th>Staff</th><th>Aksi</th><th>Detail</th></tr>
 {% for r in rows %}<tr><td>{{ r.ts }}</td><td>{{ r.username or '-' }}</td><td>{{ r.action }}</td><td>{{ r.detail }}</td></tr>{% endfor %}
-</table>
+</table></div>
 <p>Halaman {{ pg }}/{{ pages }} (50 per halaman){% if pg > 1 %} <a href="?action={{ act|urlencode }}&amp;page={{ pg - 1 }}">Sebelumnya</a>{% endif %}{% if pg < pages %} <a href="?action={{ act|urlencode }}&amp;page={{ pg + 1 }}">Berikutnya</a>{% endif %}</p>
 <form method="post" action="/owner/ekspor"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button>Ekspor member (CSV)</button></form>
 {% endblock %}

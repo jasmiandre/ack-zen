@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block body %}
 <h1>Kelola staff</h1>
-<table><tr><th>User</th><th>Nama</th><th>Role</th><th>Status</th><th></th></tr>
+<div class="tw"><table><tr><th>User</th><th>Nama</th><th>Role</th><th>Status</th><th></th></tr>
 {% for s in staff %}<tr><td>{{ s.username }}</td><td>{{ s.display_name }}</td><td>{{ s.roles }}</td>
 <td>{{ 'aktif' if s.active else 'nonaktif' }}</td>
 <td>{% if s.active %}<form method="post" action="/owner/staff/{{ s.id }}/disable">
 <input type="hidden" name="csrf_token" value="{{ csrf }}"><button>Nonaktifkan</button></form>{% endif %}</td></tr>{% endfor %}
-</table>
+</table></div>
 <h2>Tambah staff</h2>
 <form method="post" action="/owner/staff" autocomplete="off">
 <input type="hidden" name="csrf_token" value="{{ csrf }}">

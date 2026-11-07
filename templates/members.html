@@ -14,13 +14,13 @@
 <label><input type="checkbox" name="verified" value="1"{% if f.verified %} checked{% endif %}> Terverifikasi saja</label>
 <button>Filter</button></form>
 <p>{{ total }} member &mdash; halaman {{ page }}/{{ pages }}</p>
-<table><tr><th>Kode</th><th>Nama</th><th>Usia</th><th>Gender</th><th>Agama</th><th>Suku</th><th>Domisili</th><th>Program</th><th>Status</th><th>Pipeline</th></tr>
+<div class="tw"><table><tr><th>Kode</th><th>Nama</th><th>Usia</th><th>Gender</th><th>Agama</th><th>Suku</th><th>Domisili</th><th>Program</th><th>Status</th><th>Pipeline</th></tr>
 {% for r in rows %}<tr><td>{{ r.code }}</td><td>{{ r.full_name }}</td><td>{{ r.age }}</td><td>{{ r.gender }}</td><td>{{ r.religion }}</td><td>{{ r.ethnicity }}</td><td>{{ r.domicile }}</td><td>{{ r.program or '-' }}</td><td>{{ r.status }}</td>
 <td><form method="post" action="/anggota/{{ r.id }}/pipeline"><input type="hidden" name="csrf_token" value="{{ csrf }}">
 <label for="pl{{ r.id }}">Pipeline</label><select id="pl{{ r.id }}" name="pipeline">{% for o in pipeline %}<option{% if r.pipeline == o %} selected{% endif %}>{{ o }}</option>{% endfor %}</select>
 <label for="fu{{ r.id }}">Follow-up berikutnya</label><input id="fu{{ r.id }}" name="next_followup_at" placeholder="YYYY-MM-DD" value="{{ r.next_followup_at or '' }}" maxlength="10">
 <label for="nt{{ r.id }}">Catatan internal</label><input id="nt{{ r.id }}" name="internal_notes" maxlength="1000" value="{{ r.internal_notes or '' }}"><button>Simpan</button></form></td></tr>{% endfor %}
-</table>
+</table></div>
 <p>{% if page > 1 %}<a href="/anggota?{{ qs }}&amp;page={{ page - 1 }}">&laquo; Sebelumnya</a>{% endif %}
 {% if page < pages %} <a href="/anggota?{{ qs }}&amp;page={{ page + 1 }}">Berikutnya &raquo;</a>{% endif %}</p>
 {% endblock %}

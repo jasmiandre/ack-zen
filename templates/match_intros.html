@@ -2,11 +2,11 @@
 {% block body %}
 <h1>Perkenalan</h1>
 {% if msg %}<p role="alert">{{ msg }}</p>{% endif %}
-<table><tr><th>#</th><th>A</th><th>B</th><th>Tahap</th><th>Aksi</th></tr>
+<div class="tw"><table><tr><th>#</th><th>A</th><th>B</th><th>Tahap</th><th>Aksi</th></tr>
 {% for v in rows %}{% set r = v.r %}<tr><td>{{ r.id }}</td><td>{{ r.ca }} ({{ r.resp_a or '-' }})</td><td>{{ r.cb }} ({{ r.resp_b or '-' }})</td><td>{{ v.label }}</td><td>
 {% if r.status == 'proposed' %}{% for col, who in (('resp_a','A'),('resp_b','B')) %}{% if not r[col] %}<form method="post" action="/perkenalan/{{ r.id }}/aksi"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="{{ col }}"><label>Respons {{ who }} <select name="choice"><option>tertarik</option><option>tidak</option></select></label><button>Catat</button></form>{% endif %}{% endfor %}{% endif %}
 {% if r.status == 'mutual' and not r.outcome %}<form method="post" action="/perkenalan/{{ r.id }}/aksi"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="slot"><label>Slot dinner (YYYY-MM-DDTHH:MM, Platinum) <input name="starts_at" maxlength="16"></label><label>Tempat <input name="venue" maxlength="120"></label><button>Tambah slot</button></form>
 <form method="post" action="/perkenalan/{{ r.id }}/aksi"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="jadwal"><button>Dinner dijadwalkan</button></form>{% endif %}
 {% if r.outcome == 'dinner_scheduled' %}<form method="post" action="/perkenalan/{{ r.id }}/aksi"><input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="hasil"><select name="result" aria-label="Hasil">{% for k, l in outcomes.items() %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select><button>Simpan hasil</button></form>{% endif %}
-</td></tr>{% endfor %}</table>
+</td></tr>{% endfor %}</table></div>
 {% endblock %}

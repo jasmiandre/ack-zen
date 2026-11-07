@@ -3,7 +3,7 @@
 <h1>Impor member (CSV)</h1>
 {% if error %}<p role="alert">{{ error }}</p>{% endif %}
 {% if res is defined %}<p>{{ 'Disimpan' if committed else 'Pratinjau (belum disimpan)' }}: {{ ok }} diterima, {{ res|length - ok }} ditolak.</p>
-<table><tr><th>Baris</th><th>Hasil</th><th>Alasan</th></tr>{% for l, st, why in res %}<tr><td>{{ l }}</td><td>{{ st }}</td><td>{{ why }}</td></tr>{% endfor %}</table>{% endif %}
+<div class="tw"><table><tr><th>Baris</th><th>Hasil</th><th>Alasan</th></tr>{% for l, st, why in res %}<tr><td>{{ l }}</td><td>{{ st }}</td><td>{{ why }}</td></tr>{% endfor %}</table></div>{% endif %}
 <p>Maks {{ max_rows }} baris, UTF-8. Hanya data DUMMY sampai kebijakan ditetapkan. Tanggal lahir wajib lengkap, usia 18+. Diterima = status pending + perlu review.</p>
 <form method="post" action="/owner/impor" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf }}">
 <p><label for="f">File CSV</label> <input id="f" type="file" name="file" accept=".csv" required></p>
