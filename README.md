@@ -1,7 +1,7 @@
 # ACK (Aku Cari Kamu) Prototype
 
 Fondasi aplikasi: FastAPI + Jinja2 + SQLite, autentikasi staff (argon2 password hashing, server-side session cookie), multi-role RBAC, CSRF token, dan audit log minimal.
-Status saat ini: Prototype Tahap 1 (Landing page responsif + Fondasi Tahap 0). Jangan menginput data pribadi asli klien.
+Status saat ini: Stage 4 (staff). Cakupan: antrean verifikasi, kartu Silver + tautan WA, impor/ekspor CSV (format WA Silver), audit berhalaman, retensi KTP (Owner). Jangan menginput data pribadi asli klien.
 
 ---
 
@@ -159,7 +159,7 @@ sudo -S -p '' systemctl restart ack                                        # ini
 # rollback: systemctl stop ack; kembalikan commit sebelumnya + data/ack.db.pre-stage2; start ack
 ```
 
-Tes: `venv/bin/python -m unittest` (112 tes). Coverage: `venv/bin/coverage run -m unittest && venv/bin/coverage report -m`.
+Tes: `venv/bin/python -m unittest` (242+ tes; discovery otomatis, jalankan hanya di remote). Coverage: `venv/bin/coverage run -m unittest && venv/bin/coverage report -m`.
 
 ### Pertanyaan terbuka untuk klien
 Teks resmi syarat/privasi (masih DRAF), masa retensi KTP, harga dan durasi program, rekening pembayaran, daftar pilihan agama/pendidikan/sumber final.
@@ -205,3 +205,13 @@ venv/bin/python db.py dryrun data/ack.db                                    # ->
 venv/bin/python -W error::ResourceWarning -m unittest -q test_stage0 test_stage1 test_stage2 test_stage3
 # rollback: systemctl stop ack; git checkout main; cp data/ack.db.bak-pre-stage3-XXXX data/ack.db; systemctl start ack
 ```
+
+### Stage 4 (staff)
+
+- Endpoint per peran: finance menyetujui pembayaran (`/keuangan`, approve di `staff.py`); verifier memakai `/verifikasi`; matchmaker `/anggota`, `/perkenalan`; owner `/owner/*` (retensi KTP, program, staff, impor CSV, audit).
+- Pipeline retensi KTP: tombol Owner saja, batch 20, usia >30 hari; tanpa cleanup lewat GET dan tanpa cron.
+- Audit: halaman 50 baris (`LIMIT 50 OFFSET`).
+- Keputusan bisnis: durasi program `NULL` = blok kuota; mutual-once `NULL` = tidak diketahui, `0` = tidak ada.
+- Migrasi schema versi 6. Backup sebelum deploy (`data/ack.db.bak-pre-*`, chmod 600); rollback: hentikan service, salin balik backup ke `data/ack.db`. Jangan reset DB secara buta; `uploads/` jangan dihapus.
+- Tes: `venv/bin/python -m unittest` di remote (discovery otomatis). Tidak ada pip lokal.
+- UI staff: target sentuh >= 44px, teks tampil >= 16px, tanpa overflow di 390px.

@@ -59,3 +59,9 @@ probe2.mjs
 live_smoke.py
 capture*.mjs
 capture*.sh
+
+# Stage4 local artifacts (may hold credentials)
+/backup/
+/live_workflow_qa.py
+/stage4_playwright_qa.mjs
+/stage4_shots/
