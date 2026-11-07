@@ -215,3 +215,9 @@ venv/bin/python -W error::ResourceWarning -m unittest -q test_stage0 test_stage1
 - Migrasi schema versi 6. Backup sebelum deploy (`data/ack.db.bak-pre-*`, chmod 600); rollback: hentikan service, salin balik backup ke `data/ack.db`. Jangan reset DB secara buta; `uploads/` jangan dihapus.
 - Tes: `venv/bin/python -m unittest` di remote (discovery otomatis). Tidak ada pip lokal.
 - UI staff: target sentuh >= 44px, teks tampil >= 16px, tanpa overflow di 390px.
+
+### Stage 5 chunk 2: bukti bayar event (dalam pengerjaan)
+
+- Schema v8 (additive): `event_regs.proof_file_id/proof_uploaded_at/reject_reason/paid_at/paid_by`. Bukti = `member_files(kind='event_proof')`, terenkripsi Fernet, pola `pending_file_cleanup` yang sama dengan portal.
+- Member pemilik: `/akun/event/{id}` (tagihan memakai `locked_price_idr`, tanpa rekening/jatuh tempo karangan) dan unggah `selected`->`proof_uploaded`. Finance/Owner: `/keuangan/event` (lihat bukti no-store, audit hanya ID, setujui sekali -> `paid`, tolak wajib alasan; kursi tetap `selected`, unggah ulang boleh).
+- Keputusan: TIDAK ada refund/pembatalan otomatis. Batal untuk `paid`/`checked_in` diblokir sampai kebijakan refund dikonfigurasi; tinjau manual. QR/tamu = chunk berikutnya.

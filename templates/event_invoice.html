@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Tagihan event: {{ r.title }}</h1>
+{% if msg %}<p role="alert">{{ msg }}</p>{% endif %}
+<p>Status: <strong>{{ r.status }}</strong><br>
+Nominal: {{ ('Rp %s' % '{:,}'.format(r.locked_price_idr).replace(',', '.')) if r.locked_price_idr is not none else 'belum ditetapkan' }}</p>
+{% if r.status == 'registered' %}<p>Menunggu seleksi staf.</p>
+{% elif r.status == 'selected' %}
+{% if r.reject_reason %}<p class="err" role="alert">Bukti ditolak: {{ r.reject_reason }}. Kursi Anda tetap dipegang; unggah bukti baru.</p>{% endif %}
+<p>Instruksi pembayaran akan diberikan oleh staf.</p>
+{% if up and r.locked_price_idr is not none %}<form method="post" action="/akun/event/bukti" enctype="multipart/form-data">
+<input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="rid" value="{{ r.id }}">
+<label for="proof">Bukti transfer (JPG/PNG/WEBP, maks 10 MB)</label><input id="proof" type="file" name="proof" accept="image/jpeg,image/png,image/webp" required>
+<p><button>Unggah bukti</button></p></form>{% endif %}
+{% elif r.status == 'proof_uploaded' %}<p>Bukti diterima; menunggu verifikasi Finance.</p>
+{% elif r.status == 'paid' %}<p>Pembayaran terverifikasi.</p>{% endif %}
+<p><a href="/event/{{ r.slug }}">Kembali ke event</a></p>
+{% endblock %}

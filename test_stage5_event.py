@@ -30,7 +30,7 @@ class Mig(unittest.TestCase):
         db.migrate(c)
         db.migrate(c)
         db.init_db(c)
-        self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0], 7)
+        self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0], 8)
         self.assertEqual([r[0] for r in c.execute("SELECT slug FROM events ORDER BY id")], ["event-1", "event-2"])
         self.assertEqual(c.execute("SELECT price_idr,capacity,quota_m FROM events WHERE id=2").fetchone()[:], (None, None, None))
         self.assertEqual(c.execute("SELECT status,answers FROM event_regs").fetchone()[:], ("weird_legacy", "{}"))

@@ -5,7 +5,7 @@
 Harga: {{ ('Rp %s' % '{:,}'.format(e.price_idr).replace(',', '.')) if e.price_idr is not none else 'akan diumumkan' }}</p>
 {% if e.description %}<p>{{ e.description }}</p>{% endif %}
 {% if msg %}<p role="alert">{{ msg }}</p>{% endif %}
-{% if reg %}<p>Status pendaftaran Anda: <strong>{{ reg.status }}</strong></p>
+{% if reg %}<p>Status pendaftaran Anda: <strong>{{ reg.status }}</strong> {% if reg.status != 'registered' and reg.status != 'cancelled' %}<a href="/akun/event/{{ reg.id }}">Tagihan &amp; bukti</a>{% endif %}</p>
 {% elif logged %}<form method="post" action="/event/{{ e.slug }}/daftar"><input type="hidden" name="csrf_token" value="{{ csrf }}">
 {% for f in schema %}{% if f.type == 'bool' %}<label><input type="checkbox" name="q_{{ f.key }}" value="ya" {{ 'checked' if a.get('q_' ~ f.key) }}> {{ f.label }}{{ ' *' if f.required }}</label>
 {% elif f.type == 'choice' %}<label for="q_{{ f.key }}">{{ f.label }}{{ ' *' if f.required }}</label><select id="q_{{ f.key }}" name="q_{{ f.key }}"><option value="">-</option>{% for o in f.options %}<option {{ 'selected' if a.get('q_' ~ f.key) == o }}>{{ o }}</option>{% endfor %}</select>

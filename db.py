@@ -14,7 +14,7 @@ ROLES = ("owner", "finance", "verifier", "matchmaker", "event")
 ROLE_LABEL = {"owner": "Owner", "finance": "Admin Keuangan", "verifier": "Verifikator",
               "matchmaker": "Matchmaker", "event": "Event"}
 MIN_AGE = 18
-SCHEMA_VERSION = 7   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal; v4 = pending_file_cleanup; v6 = introductions quota/outcome cols; v5 = Stage 4 staff cols + app_settings (all additive, idempotent)
+SCHEMA_VERSION = 8   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal; v4 = pending_file_cleanup; v6 = introductions quota/outcome cols; v5 = Stage 4 staff cols + app_settings (all additive, idempotent)
 KTP_RETENTION_DAYS_DEFAULT = 30   # seeded into app_settings; ID-photo retention counted from verification approved_at
 PAY_HOURS = int(os.environ["ACK_PAY_HOURS"]) if os.environ.get("ACK_PAY_HOURS", "").isdigit() else None  # invoice deadline in hours; None = not set (no approved source) -> due_at NULL, UI "belum ditetapkan"
 
@@ -230,6 +230,8 @@ V7_COLS = {"events": (("slug", "TEXT"), ("ends_at", "TEXT"), ("location", "TEXT"
                       ("extra_fields", "TEXT NOT NULL DEFAULT '[]'")),                # bounded JSON schema, validated in events.py
            "event_regs": (("selected_at", "TEXT"), ("locked_price_idr", "INTEGER"), ("cancelled_at", "TEXT"),
                           ("answers", "TEXT NOT NULL DEFAULT '{}'"))}
+V8_COLS = {"event_regs": (("proof_file_id", "INTEGER"), ("proof_uploaded_at", "TEXT"), ("reject_reason", "TEXT"),
+                          ("paid_at", "TEXT"), ("paid_by", "INTEGER"))}   # proof = member_files(kind='event_proof'); reject keeps it until replaced
 EVENT_REG_STATUS = "('registered','selected','proof_uploaded','paid','checked_in','cancelled')"
 FILE_COLS = (("encrypted", "INTEGER NOT NULL DEFAULT 0 CHECK(encrypted IN (0,1))"),)
 
@@ -238,7 +240,7 @@ def migrate(conn):
     if conn.execute("PRAGMA user_version").fetchone()[0] >= SCHEMA_VERSION:
         return
     with tx(conn):
-        for table, cols in (("members", MEMBER_COLS), ("member_files", FILE_COLS), *V3_COLS.items(), *V5_COLS.items(), *V6_COLS.items(), *V7_COLS.items()):
+        for table, cols in (("members", MEMBER_COLS), ("member_files", FILE_COLS), *V3_COLS.items(), *V5_COLS.items(), *V6_COLS.items(), *V7_COLS.items(), *V8_COLS.items()):
             have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
             for name, ddl in cols:
                 if name not in have:

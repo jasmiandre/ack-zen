@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Bukti pembayaran event</h1>
+{% if msg %}<p role="alert">{{ msg }}</p>{% endif %}
+{% if not rows %}<p>Tidak ada bukti menunggu.</p>{% else %}
+<div class="tw"><table><tr><th>ID</th><th>Event</th><th>Member</th><th>Nominal</th><th>Bukti</th><th>Aksi</th></tr>
+{% for r in rows %}<tr><td>{{ r.id }}</td><td>{{ r.title }}</td><td>{{ r.code }}</td>
+<td>{{ r.locked_price_idr if r.locked_price_idr is not none else 'belum ditetapkan' }}</td>
+<td><a href="/keuangan/event/{{ r.id }}/bukti" target="_blank" rel="noopener">Lihat</a></td>
+<td><form method="post" action="/keuangan/event/{{ r.id }}/setuju"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button>Setujui</button></form>
+<form method="post" action="/keuangan/event/{{ r.id }}/tolak"><input type="hidden" name="csrf_token" value="{{ csrf }}">
+<label for="rs{{ r.id }}">Alasan tolak</label><input id="rs{{ r.id }}" type="text" name="reason" required maxlength="300"><button>Tolak</button></form></td></tr>{% endfor %}
+</table></div>{% endif %}
+{% endblock %}

@@ -6,13 +6,16 @@ Payments, proof upload, check-in/QR and guest registration are later chunks.
 """
 import json
 import re
+import secrets
 from datetime import date, datetime
 
 from fastapi import Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 
 import auth
 import db
+import portal
+import register
 
 EVENT_STAFF = {"event", "owner"}
 HELD = ("selected", "proof_uploaded", "paid", "checked_in")   # statuses that occupy a seat
@@ -175,7 +178,7 @@ def select_seat(conn, eid, rid):
         return True, "Terpilih; kursi dipesan."
 
 
-def mount(app, conn, jenv, secret_key, cookie_secure):
+def mount(app, conn, jenv, secret_key, cookie_secure, fernet=None, priv_dir=None):
     def render(name, status=200, s=None, csrf="", **ctx):
         return HTMLResponse(jenv.get_template(name).render(sess=s, csrf=csrf, http_warning=not cookie_secure,
                                                            labels=db.ROLE_LABEL, **ctx), status_code=status)
@@ -308,11 +311,11 @@ def mount(app, conn, jenv, secret_key, cookie_secure):
             return PlainTextResponse("Not found", status_code=404)
         with db.tx(conn):
             r = conn.execute("SELECT status FROM event_regs WHERE id=? AND event_id=?", (rid, eid)).fetchone()
-            ok = bool(r) and r["status"] in ("registered", "selected", "proof_uploaded")   # paid -> refund flow = Finance, next chunk
+            ok = bool(r) and r["status"] in ("registered", "selected", "proof_uploaded")   # paid/checked_in: no refund automation; manual review only
             if ok:
                 conn.execute("UPDATE event_regs SET status='cancelled',cancelled_at=? WHERE id=?", (db.now_iso(), rid))
                 db.audit(conn, s["staff_id"], "event_cancel", f"event={eid} reg={rid} from={r['status']}")
-        return detail(s, eid, "Dibatalkan; kursi dilepas." if ok else "Status ini tidak bisa dibatalkan di tahap ini.", 200 if ok else 409)
+        return detail(s, eid, "Dibatalkan; kursi dilepas." if ok else "Sudah dibayar/check-in: pembatalan finansial butuh kebijakan refund (belum dikonfigurasi); tinjau manual." if r and r["status"] in ("paid", "checked_in") else "Status ini tidak bisa dibatalkan.", 200 if ok else 409)
 
     # ---- public / member -------------------------------------------------
     def member_sess(request):
@@ -325,7 +328,7 @@ def mount(app, conn, jenv, secret_key, cookie_secure):
         if not e:
             return PlainTextResponse("Not found", status_code=404)
         ms = member_sess(request)
-        reg = conn.execute("SELECT status FROM event_regs WHERE event_id=? AND member_id=?",
+        reg = conn.execute("SELECT id,status FROM event_regs WHERE event_id=? AND member_id=?",
                            (e["id"], ms["member_id"])).fetchone() if ms else None
         return render("public/event.html", status, None, ms["csrf"] if ms else "", e=e, schema=json.loads(e["extra_fields"] or "[]"),
                       logged=bool(ms), reg=reg, msg=msg, a=answers or {})
@@ -362,3 +365,151 @@ def mount(app, conn, jenv, secret_key, cookie_secure):
                 db.audit(conn, None, "event_register", f"member={m['code']} event={e['id']}")
         return public(request, slug, 200, "Pendaftaran diterima. Staf akan memilih peserta." if cur.rowcount
                       else "Anda sudah terdaftar; data pendaftaran tidak diubah.")
+
+    # ---- Stage 5 chunk 2: payment proof (member) + finance verification ---------
+    # Files follow the portal pattern: pending_file_cleanup row BEFORE the write, dropped in the tx that references
+    # the file; replaced files get a cleanup row in the same tx; unlink only in reconcile (never inside a tx).
+    FIN = {"finance", "owner"}
+
+    def own_reg(s, rid):   # other members' / unknown ids look identical (404): no IDOR oracle
+        if not (isinstance(rid, str) and rid.isascii() and rid.isdigit() and len(rid) < 10):
+            return None
+        return conn.execute("SELECT r.*,e.title,e.slug FROM event_regs r JOIN events e ON e.id=r.event_id "
+                            "WHERE r.id=? AND r.member_id=?", (int(rid), s["member_id"])).fetchone()
+
+    def invoice(s, r, status=200, msg=None):
+        return render("event_invoice.html", status, None, s["csrf"], r=r, msg=msg, up=fernet is not None)
+
+    @app.get("/akun/event/{rid}")
+    async def ev_invoice(request: Request, rid: str):
+        s = member_sess(request)
+        if not s:
+            return RedirectResponse("/akun/masuk", 303)
+        r = own_reg(s, rid)
+        return invoice(s, r) if r else PlainTextResponse("Not found", status_code=404)
+
+    @app.post("/akun/event/bukti")
+    async def ev_proof_upload(request: Request):
+        s = member_sess(request)
+        if not s:
+            return RedirectResponse("/akun/masuk", 303)
+        try:
+            form = await request.form(max_files=2, max_fields=10)
+        except Exception:
+            return PlainTextResponse("Permintaan tidak valid", status_code=400)
+        try:
+            if not auth.csrf_ok(s, str(form.get("csrf_token") or "")):
+                return PlainTextResponse("Forbidden", status_code=403)
+            r = own_reg(s, form.get("rid"))
+            if not r:
+                return PlainTextResponse("Not found", status_code=404)
+            if r["status"] != "selected" or r["locked_price_idr"] is None:
+                return invoice(s, r, 409, "Bukti hanya bisa diunggah saat status 'selected' dengan harga terkunci.")
+            if fernet is None:
+                return invoice(s, r, 503, "Penyimpanan aman belum dikonfigurasi.")
+            ups = {k: v for k, v in form.items() if not isinstance(v, str)}
+            if set(ups) != {"proof"}:
+                return invoice(s, r, 400, "Pilih satu file gambar bukti.")
+            try:
+                jpeg = register.clean_image(await ups["proof"].read(register.MAX_IMG + 1), ups["proof"].filename, ups["proof"].content_type)
+            except ValueError as ex:
+                return invoice(s, r, 400, str(ex))
+            mid, name = s["member_id"], secrets.token_hex(16) + ".enc"
+            try:
+                conn.execute("INSERT INTO pending_file_cleanup(member_id,stored_path,reason,created_at) VALUES(?,?,'new',?)",
+                             (mid, name, db.now_iso()))
+                register._write_private(priv_dir, fernet.encrypt(jpeg), ".enc", name)
+            except BaseException:
+                portal.reconcile_pending(conn, priv_dir, mid)
+                raise
+            ok = False
+            try:
+                with db.tx(conn):
+                    cur = conn.execute("SELECT status,proof_file_id FROM event_regs WHERE id=? AND member_id=?", (r["id"], mid)).fetchone()
+                    if cur and cur["status"] == "selected":   # re-checked under the write lock
+                        fid = conn.execute("INSERT INTO member_files(member_id,kind,stored_path,created_at,encrypted) VALUES(?,?,?,?,1)",
+                                           (mid, "event_proof", name, db.now_iso())).lastrowid
+                        conn.execute("DELETE FROM pending_file_cleanup WHERE stored_path=?", (name,))
+                        if cur["proof_file_id"]:   # replacing a rejected proof
+                            old = conn.execute("SELECT stored_path FROM member_files WHERE id=?", (cur["proof_file_id"],)).fetchone()
+                            conn.execute("DELETE FROM member_files WHERE id=?", (cur["proof_file_id"],))
+                            if old:
+                                conn.execute("INSERT OR IGNORE INTO pending_file_cleanup(member_id,stored_path,reason,created_at) "
+                                             "VALUES(?,?,'replaced',?)", (mid, old[0], db.now_iso()))
+                        conn.execute("UPDATE event_regs SET status='proof_uploaded',proof_file_id=?,proof_uploaded_at=?,reject_reason=NULL "
+                                     "WHERE id=?", (fid, db.now_iso(), r["id"]))
+                        db.audit(conn, None, "event_proof_upload", f"reg={r['id']}")
+                        ok = True
+            finally:
+                portal.reconcile_pending(conn, priv_dir, mid)   # also removes the new file if the tx rolled back / lost the race
+            r = own_reg(s, str(r["id"]))
+            return RedirectResponse(f"/akun/event/{r['id']}", 303) if ok else invoice(s, r, 409, "Status berubah; bukti tidak disimpan.")
+        finally:
+            await form.close()
+
+    def fin_gate(request):
+        c = request.cookies.get(auth.COOKIE)
+        s = auth.load_session(conn, secret_key, c) if c else None
+        if not (s and s["staff_id"]):
+            return None, RedirectResponse("/login", 303)
+        return (s, None) if s["roles"] & FIN else (None, PlainTextResponse("Forbidden", status_code=403))
+
+    async def fin_post(request):
+        s, bad = fin_gate(request)
+        if bad:
+            return None, None, bad
+        form = await request.form()
+        if not auth.csrf_ok(s, form.get("csrf_token")):
+            return None, None, PlainTextResponse("Forbidden", status_code=403)
+        return s, form, None
+
+    def fin_queue(s, status=200, msg=None):
+        rows = conn.execute("SELECT r.id,r.locked_price_idr,r.proof_uploaded_at,m.code,e.title FROM event_regs r "
+                            "JOIN members m ON m.id=r.member_id JOIN events e ON e.id=r.event_id "
+                            "WHERE r.status='proof_uploaded' ORDER BY r.proof_uploaded_at,r.id").fetchall()
+        return render("event_finance.html", status, s, s["csrf"], rows=rows, msg=msg)
+
+    @app.get("/keuangan/event")
+    async def fin_ev_list(request: Request):
+        s, bad = fin_gate(request)
+        return bad or fin_queue(s)
+
+    @app.get("/keuangan/event/{rid}/bukti")
+    async def fin_ev_proof(request: Request, rid: int):
+        s, bad = fin_gate(request)
+        if bad:
+            return bad
+        r = conn.execute("SELECT f.stored_path,f.encrypted FROM event_regs g JOIN member_files f ON f.id=g.proof_file_id "
+                         "WHERE g.id=? AND f.kind='event_proof'", (rid,)).fetchone()
+        data = register.read_private(priv_dir, r["stored_path"], r["encrypted"], fernet) if r and fernet else None
+        if data is None:
+            return PlainTextResponse("Not found", status_code=404, headers={"Cache-Control": "no-store"})
+        db.audit(conn, s["staff_id"], "event_proof_view", f"reg={rid}")   # id only, no PII
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+    @app.post("/keuangan/event/{rid}/setuju")
+    async def fin_ev_approve(request: Request, rid: int):
+        s, form, bad = await fin_post(request)
+        if bad:
+            return bad
+        with db.tx(conn):   # single winner: the status guard is part of the UPDATE
+            n = conn.execute("UPDATE event_regs SET status='paid',paid_at=?,paid_by=? WHERE id=? AND status='proof_uploaded' "
+                             "AND proof_file_id IS NOT NULL", (db.now_iso(), s["staff_id"], rid)).rowcount
+            if n:
+                db.audit(conn, s["staff_id"], "event_payment_approve", f"reg={rid}")
+        return fin_queue(s, 200 if n else 409, "Pembayaran disetujui." if n else "Sudah diproses atau tidak ada bukti menunggu.")
+
+    @app.post("/keuangan/event/{rid}/tolak")
+    async def fin_ev_reject(request: Request, rid: int):
+        s, form, bad = await fin_post(request)
+        if bad:
+            return bad
+        reason = str(form.get("reason") or "").strip()
+        if not 1 <= len(reason) <= 300:
+            return fin_queue(s, 400, "Alasan tolak wajib (1-300 karakter).")
+        with db.tx(conn):   # seat stays 'selected'; the rejected proof stays stored until the member replaces it
+            n = conn.execute("UPDATE event_regs SET status='selected',reject_reason=? WHERE id=? AND status='proof_uploaded'",
+                             (reason, rid)).rowcount
+            if n:
+                db.audit(conn, s["staff_id"], "event_payment_reject", f"reg={rid}")
+        return fin_queue(s, 200 if n else 409, "Ditolak; member diminta unggah ulang." if n else "Sudah diproses.")

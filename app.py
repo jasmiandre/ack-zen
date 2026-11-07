@@ -67,7 +67,7 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
     ops.mount(app, conn, jenv, secret_key, cookie_secure, Fernet(fernet_key.encode()) if fernet_key else None, priv)
     pipeline.mount(app, conn, jenv, secret_key, cookie_secure)
     matching.mount(app, conn, jenv, secret_key, cookie_secure)
-    events.mount(app, conn, jenv, secret_key, cookie_secure)
+    events.mount(app, conn, jenv, secret_key, cookie_secure, fernet, priv)
 
     def page(request, name, status=200, sess=None, **ctx):
         html = jenv.get_template(name).render(
@@ -297,6 +297,6 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
 
     # raw ASGI wrapper: cap is enforced on received bytes before multipart parsing
     app.add_middleware(BodyLimit, path="/daftar/submit", limit=register.BODY_LIMIT)
-    for up in ("/akun/bayar/unggah", "/akun/verifikasi/unggah"):
+    for up in ("/akun/bayar/unggah", "/akun/verifikasi/unggah", "/akun/event/bukti"):
         app.add_middleware(BodyLimit, path=up, limit=register.BODY_LIMIT)
     return app
