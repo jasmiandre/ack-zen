@@ -3,5 +3,6 @@
 <h1>Dashboard</h1>
 <p>{{ sess.display_name }} &mdash; role: {% for r in sess.roles|sort %}{{ labels[r] }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
 <p>Tahap 0 hanya fondasi login &amp; role. Fitur member/pembayaran/event belum ada.</p>
+{% if stats %}<h2>Ringkasan</h2><ul>{% for k, v in stats.items() %}<li>{{ k }}: {{ v }}</li>{% endfor %}</ul>{% endif %}
 <ul>{% for r in areas %}<li><a href="/access/{{ r }}">Area {{ labels[r] }}</a></li>{% endfor %}</ul>
 {% endblock %}

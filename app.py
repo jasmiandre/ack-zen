@@ -17,6 +17,7 @@ import portal
 import register
 from register import BodyLimit
 import seed
+import pipeline
 import staff
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -59,6 +60,8 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
                  env.get("WA_ADMIN", "") if wa_admin is None else wa_admin)
 
     staff.mount(app, conn, jenv, secret_key, cookie_secure, Fernet(fernet_key.encode()) if fernet_key else None, priv)
+
+    pipeline.mount(app, conn, jenv, secret_key, cookie_secure)
 
     def page(request, name, status=200, sess=None, **ctx):
         html = jenv.get_template(name).render(
@@ -189,7 +192,8 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
         if redir:
             return redir
         return page(request, "dashboard.html", sess=s, areas=AREAS if "owner" in s["roles"]
-                    else [r for r in AREAS if r in s["roles"]])
+                    else [r for r in AREAS if r in s["roles"]],
+                    stats=pipeline.stats(conn, s["roles"]))
 
     @app.get("/access/{role}")
     async def access(request: Request, role: str):

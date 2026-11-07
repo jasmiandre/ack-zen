@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Daftar member</h1>
+{% if error %}<p role="alert">{{ error }}</p>{% endif %}
+<form method="get" action="/anggota">
+<label for="q">Cari nama/kode</label><input id="q" name="q" value="{{ f.q or '' }}" maxlength="60">
+{% for k, lbl in (('gender','Gender'),('religion','Agama'),('ethnicity','Suku')) %}
+<label for="{{ k }}">{{ lbl }}</label><select id="{{ k }}" name="{{ k }}"><option value="">Semua</option>{% for o in opts[k] %}<option{% if f[k] == o %} selected{% endif %}>{{ o }}</option>{% endfor %}</select>{% endfor %}
+<label for="domicile">Domisili</label><input id="domicile" name="domicile" value="{{ f.domicile or '' }}" maxlength="60">
+<label for="pipeline">Pipeline</label><select id="pipeline" name="pipeline"><option value="">Semua</option>{% for o in pipeline %}<option{% if f.pipeline == o %} selected{% endif %}>{{ o }}</option>{% endfor %}</select>
+<label for="program">Program</label><select id="program" name="program"><option value="">Semua</option>{% for p in programs %}<option value="{{ p.id }}"{% if f.program == p.id %} selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>
+<label for="age_min">Usia min</label><input id="age_min" name="age_min" size="3" value="{{ f.age_min if f.age_min is not none else '' }}">
+<label for="age_max">Usia maks</label><input id="age_max" name="age_max" size="3" value="{{ f.age_max if f.age_max is not none else '' }}">
+<label><input type="checkbox" name="verified" value="1"{% if f.verified %} checked{% endif %}> Terverifikasi saja</label>
+<button>Filter</button></form>
+<p>{{ total }} member &mdash; halaman {{ page }}/{{ pages }}</p>
+<table><tr><th>Kode</th><th>Nama</th><th>Usia</th><th>Gender</th><th>Agama</th><th>Suku</th><th>Domisili</th><th>Program</th><th>Status</th><th>Pipeline</th></tr>
+{% for r in rows %}<tr><td>{{ r.code }}</td><td>{{ r.full_name }}</td><td>{{ r.age }}</td><td>{{ r.gender }}</td><td>{{ r.religion }}</td><td>{{ r.ethnicity }}</td><td>{{ r.domicile }}</td><td>{{ r.program or '-' }}</td><td>{{ r.status }}</td>
+<td><form method="post" action="/anggota/{{ r.id }}/pipeline"><input type="hidden" name="csrf_token" value="{{ csrf }}">
+<label for="pl{{ r.id }}">Pipeline</label><select id="pl{{ r.id }}" name="pipeline">{% for o in pipeline %}<option{% if r.pipeline == o %} selected{% endif %}>{{ o }}</option>{% endfor %}</select>
+<label for="fu{{ r.id }}">Follow-up berikutnya</label><input id="fu{{ r.id }}" name="next_followup_at" placeholder="YYYY-MM-DD" value="{{ r.next_followup_at or '' }}" maxlength="10">
+<label for="nt{{ r.id }}">Catatan internal</label><input id="nt{{ r.id }}" name="internal_notes" maxlength="1000" value="{{ r.internal_notes or '' }}"><button>Simpan</button></form></td></tr>{% endfor %}
+</table>
+<p>{% if page > 1 %}<a href="/anggota?{{ qs }}&amp;page={{ page - 1 }}">&laquo; Sebelumnya</a>{% endif %}
+{% if page < pages %} <a href="/anggota?{{ qs }}&amp;page={{ page + 1 }}">Berikutnya &raquo;</a>{% endif %}</p>
+{% endblock %}

@@ -5,8 +5,9 @@ import secrets
 import shutil
 import sqlite3
 import sys
+import threading
 import tempfile
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import date, datetime, timedelta, timezone
 
 ROLES = ("owner", "finance", "verifier", "matchmaker", "event")
@@ -150,8 +151,44 @@ def now_iso():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+class _Res:
+    """Rows are fetched while the lock is held: a cursor read later could be reset by another thread's COMMIT/ROLLBACK."""
+
+    def __init__(self, cur):
+        self.rowcount, self.lastrowid, self._rows, self._i = cur.rowcount, cur.lastrowid, cur.fetchall(), 0
+
+    def fetchone(self):
+        if self._i < len(self._rows):
+            self._i += 1
+            return self._rows[self._i - 1]
+
+    def fetchall(self):
+        r, self._i = self._rows[self._i:], len(self._rows)
+        return r
+
+    def __iter__(self):
+        return iter(self.fetchall())
+
+
+class Conn(sqlite3.Connection):
+    """One RLock guards every statement and whole tx() blocks, so threads sharing a connection never interleave."""
+    lock = None
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.lock = threading.RLock()
+
+    def execute(self, *a):
+        with self.lock:
+            return _Res(super().execute(*a))
+
+    def executemany(self, *a):
+        with self.lock:
+            return _Res(super().executemany(*a))
+
+
 def connect(path):
-    conn = sqlite3.connect(path, isolation_level=None, check_same_thread=False, timeout=30)
+    conn = sqlite3.connect(path, isolation_level=None, check_same_thread=False, timeout=30, factory=Conn)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA busy_timeout=30000")
@@ -233,14 +270,15 @@ def dryrun(src):
 @contextmanager
 def tx(conn):
     """BEGIN IMMEDIATE: serialises writers so counters cannot race."""
-    conn.execute("BEGIN IMMEDIATE")
-    try:
-        yield conn
-    except BaseException:
-        conn.execute("ROLLBACK")
-        raise
-    else:
-        conn.execute("COMMIT")
+    with getattr(conn, "lock", None) or nullcontext():   # held for the whole tx: no other thread's statement lands inside it
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            yield conn
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+        else:
+            conn.execute("COMMIT")
 
 
 def _bump(conn, name):
