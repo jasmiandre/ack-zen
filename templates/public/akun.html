@@ -18,10 +18,12 @@
 {% if not pay %}<p>Info harga via admin.{% if sub and sub.quote_price_idr is not none %} Harga {{ sub.name }}: {{ price(sub.quote_price_idr) }}.{% endif %} Belum ada tagihan; tim akan menghubungi kamu.{% if wa %} <a href="https://wa.me/{{ wa }}">Hubungi admin via WhatsApp</a>.{% endif %}</p>
 {% else %}<p><span class="badge {{ pstate }}">{{ pay_label[pstate] }}</span> · No. tagihan {{ pay.invoice_code }}</p>
 {% if pay.reject_reason %}<p class="err banner-err">Alasan ditolak: {{ pay.reject_reason }}</p>{% endif %}
-<dl class="kv"><dt>Nominal transfer</dt><dd><strong>{{ rp(total) }}</strong>{% if pay.unique_code %} <span class="hint">(termasuk kode unik {{ '%03d' % pay.unique_code }}; transfer tepat sampai digit terakhir)</span>{% endif %}</dd>
+{% if total is none %}<dt>Nominal transfer</dt><dd><strong>{{ price(None) }}</strong></dd>
+<dt>Rekening</dt><dd>Info rekening belum diatur — hubungi admin.</dd></dl>
+{% else %}<dl class="kv"><dt>Nominal transfer</dt><dd><strong>{{ rp(total) }}</strong>{% if pay.unique_code %} <span class="hint">(termasuk kode unik {{ '%03d' % pay.unique_code }}; transfer tepat sampai digit terakhir)</span>{% endif %}</dd>
 <dt>Batas waktu</dt><dd>{% if pay.due_at %}{{ pay.due_at[:16]|replace('T',' ') }} UTC{% if overdue %} — <strong>sudah lewat</strong>, hubungi admin{% endif %}{% else %}belum ditetapkan{% endif %}</dd>
-<dt>Rekening</dt><dd>{% if bank %}{% for l in bank %}{{ l }}{% if not loop.last %}<br>{% endif %}{% endfor %}{% else %}Info rekening belum diatur — hubungi admin.{% endif %}</dd></dl>
-{% if pstate != 'approved' %}<form method="post" action="/akun/bayar/unggah" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf }}">
+<dt>Rekening</dt><dd>{% if bank %}{% for l in bank %}{{ l }}{% if not loop.last %}<br>{% endif %}{% endfor %}{% else %}Info rekening belum diatur — hubungi admin.{% endif %}</dd></dl>{% endif %}
+{% if total is not none and pstate != 'approved' %}<form method="post" action="/akun/bayar/unggah" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf }}">
 <label for="proof">{% if pay.proof_file_id %}Ganti bukti transfer{% else %}Unggah bukti transfer{% endif %} (JPG/PNG/WEBP, maks 10 MB)</label><input id="proof" name="proof" type="file" accept="image/jpeg,image/png,image/webp" required>
 <div class="nav"><button class="btn">Kirim bukti</button></div></form>{% endif %}{% endif %}</section>
 

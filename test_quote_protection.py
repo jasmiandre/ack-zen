@@ -62,13 +62,48 @@ class QuoteProtection(t3.P):
         self.assertIn("Rp 349.000", r.text)
         return cl
 
+    def test_null_amount_akun_renders_unconfigured(self):
+        """Runtime regression: GET /akun with NULL payment amount must return 200, show the
+        unconfigured hint, never Rp/None/0/Gratis for the nominal, and no bank/upload CTA."""
+        self.w.execute("UPDATE programs SET price_idr=349000, duration_days=30 WHERE id=2")
+        cl, mid = self.member(program="2")
+        pid = self.pay(mid)["id"]
+        self.w.execute("UPDATE payments SET amount_idr=NULL WHERE id=?", (pid,))   # legacy NULL-amount invoice
+        r = cl.get("/akun")
+        self.assertEqual(r.status_code, 200)
+        low = r.text.lower()
+        self.assertNotIn("bca", low) and self.assertNotIn("123456", low)   # configured bank details never leak onto a NULL-amount invoice
+        self.assertNotIn("none", low)                        # never a formatted None
+        self.assertIn("info harga via admin", low)           # unknown amount = unconfigured (db.price_label wording)
+        nominal = low.split("nominal transfer", 1)[1].split("<dt>rekening</dt>", 1)[0]
+        self.assertNotIn("gratis", nominal)                  # NULL is never free
+        import re as _re
+        self.assertIsNone(_re.search(r"rp\s*0\b", nominal))  # and never Rp 0
+        self.assertNotIn("rekening", nominal)                # no bank account for an invoice without a nominal
+        self.assertNotIn("/akun/bayar/unggah", nominal)      # no upload CTA either
+
+    def test_priced_invoice_still_shows_full_details(self):
+        """Positive control: the NULL-amount template change must not affect normal priced invoices."""
+        self.w.execute("UPDATE programs SET price_idr=349000, duration_days=30 WHERE id=2")
+        cl, mid = self.member(program="2")
+        self.pay(mid)["id"]
+        r = cl.get("/akun")
+        self.assertEqual(r.status_code, 200)
+        low = r.text.lower()
+        self.assertIn("rp 349.", low)                 # amount + unique code total
+        self.assertIn("kode unik", low)
+        self.assertIn("/akun/bayar/unggah", low)      # upload CTA still present when the amount is known
+
     def test_unconfigured_quote_never_activates_via_finance_approve(self):
         """Payment with NULL amount (legacy row) must never activate a subscription via approve."""
         self.w.execute("UPDATE programs SET price_idr=349000, duration_days=30 WHERE id=2")
         cl, mid = self.member(program="2")
         pid = self.pay(mid)["id"]
         self.w.execute("UPDATE payments SET amount_idr=NULL WHERE id=?", (pid,))   # simulate legacy NULL-amount row
-        self.w.execute("UPDATE payments SET proof_file_id=1 WHERE id=?", (pid,))
+        up = {"proof": ("bukti.png", t3.t2.img_bytes("PNG", (50, 40)), "image/png")}   # real upload through /akun/bayar/unggah
+        r0 = self.post(cl, "/akun/bayar/unggah", files_=up)
+        self.assertEqual(r0.status_code, 303)
+        self.assertTrue(self.pay(mid)["proof_file_id"])   # real member_files row, not a fake id
         self.w.execute("UPDATE users_staff SET username='fin2' WHERE username='fin'")
         import auth
         h = auth.hash_password("dummy-staff-Passw0rd")
@@ -82,10 +117,15 @@ class QuoteProtection(t3.P):
         tok = re.search(r'name="csrf_token" value="([^"]+)"', cl2.get("/login").text).group(1)
         self.assertEqual(cl2.post("/login", data={"username": "own", "password": "dummy-staff-Passw0rd", "csrf_token": tok}).status_code, 303)
         tok2 = re.search(r'name="csrf_token" value="([^"]+)"', cl2.get(f"/keuangan").text).group(1)
+        before = self.w.execute("SELECT p.status pstat, p.amount_idr amt, p.proof_file_id pf, s.status sstat, s.quote_price_idr qp, s.starts_at st, s.ends_at en "
+                                "FROM payments p JOIN subscriptions s ON s.id=p.subscription_id WHERE p.id=?", (pid,)).fetchone()
         r = cl2.post(f"/keuangan/{pid}/setuju", data={"csrf_token": tok2}, follow_redirects=False)
-        self.assertIn(r.status_code, (303, 409))
-        st = self.w.execute("SELECT p.status pstat, s.status sstat FROM payments p JOIN subscriptions s ON s.id=p.subscription_id WHERE p.id=?", (pid,)).fetchone()
-        self.assertEqual(st["sstat"], "pending")    # subscription NOT activated
+        self.assertEqual(r.status_code, 409)         # blocked: invoice has no nominal -> explicit 409, never a silent redirect
+        st = self.w.execute("SELECT p.status pstat, p.amount_idr amt, p.proof_file_id pf, s.status sstat, s.quote_price_idr qp, s.starts_at st, s.ends_at en "
+                            "FROM payments p JOIN subscriptions s ON s.id=p.subscription_id WHERE p.id=?", (pid,)).fetchone()
+        self.assertEqual(tuple(st), tuple(before))   # payment AND subscription byte-identical: approve wrote nothing
+        self.assertEqual(st["pstat"], "pending")
+        self.assertIsNone(st["st"])                  # starts_at untouched (never activated)
 
 
 if __name__ == "__main__":

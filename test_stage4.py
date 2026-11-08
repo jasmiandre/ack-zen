@@ -7,7 +7,7 @@ import unittest
 
 import db
 
-NEW = {"subscriptions": {"starts_at", "ends_at"},
+NEW = {"subscriptions": {"starts_at", "ends_at", "quote_price_idr"},
        "members": {"pipeline", "internal_notes", "next_followup_at"},
        "verifications": {"approved_at", "checklist"}}
 
@@ -54,15 +54,18 @@ class V5(unittest.TestCase):
         before = self.snap()
         for t, names in NEW.items():
             self.assertFalse(names & cols(self.c, t))
+        self.assertNotIn("quote_price_idr", cols(self.c, "subscriptions"))   # genuine pre-v11 shape
         db.init_db(self.c)
         for t, names in NEW.items():
             self.assertTrue(names <= cols(self.c, t))
         self.assertEqual(self.c.execute("PRAGMA user_version").fetchone()[0], 11)
+        self.assertIn("quote_price_idr", cols(self.c, "subscriptions"))      # v11 column exists after migration
         after = self.snap()
         for t, rows in before.items():     # old values intact; new cols NULL
             n = len(rows[0])
             self.assertEqual([r[:n] for r in after[t]], rows)
         self.assertIsNone(self.c.execute("SELECT starts_at FROM subscriptions").fetchone()[0])
+        self.assertIsNone(self.c.execute("SELECT quote_price_idr FROM subscriptions").fetchone()[0])   # legacy row: NULL quote, NEVER backfilled
         self.assertEqual(self.c.execute("SELECT COUNT(*) FROM pending_file_cleanup").fetchone()[0], 1)
 
     def test_retention_default_30(self):
@@ -72,11 +75,14 @@ class V5(unittest.TestCase):
     def test_idempotent_twice_keeps_config(self):
         db.init_db(self.c)
         self.c.execute("UPDATE app_settings SET value='45' WHERE key='ktp_retention_days'")
+        sub = self.c.execute("SELECT * FROM subscriptions").fetchone()
+        self.assertIsNone(sub["quote_price_idr"])  # legacy NULL quote going into the forced rerun
         snap = self.snap()
         self.c.execute("PRAGMA user_version=4")    # force rerun
         db.init_db(self.c)
         db.init_db(self.c)
-        self.assertEqual(self.snap(), snap)
+        self.assertEqual(self.snap(), snap)        # all rows (incl. every old subscriptions value) unchanged
+        self.assertIsNone(self.c.execute("SELECT quote_price_idr FROM subscriptions").fetchone()[0])   # twice-init preserves legacy NULL
         self.assertEqual(self.c.execute("SELECT value FROM app_settings WHERE key='ktp_retention_days'").fetchone()[0], "45")
         self.assertEqual(self.c.execute("SELECT COUNT(*) FROM app_settings").fetchone()[0], 1)
 
