@@ -1,5 +1,6 @@
 """ACK quote protection tests: subscription quote immutability. Synthetic data only."""
 import re
+from html.parser import HTMLParser
 import sqlite3
 import unittest
 
@@ -126,6 +127,92 @@ class QuoteProtection(t3.P):
         self.assertEqual(tuple(st), tuple(before))   # payment AND subscription byte-identical: approve wrote nothing
         self.assertEqual(st["pstat"], "pending")
         self.assertIsNone(st["st"])                  # starts_at untouched (never activated)
+
+
+class _PaySectionParser(HTMLParser):
+    """Collects the Tagihan & pembayaran section and checks dt/dd sit inside a dl."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.in_section = False
+        self.dl_depth = 0
+        self.dl_open = 0
+        self.dl_close = 0
+        self.stray_dt_dd = 0
+        self.texts = []
+        self._keep = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "section" and any(k == "aria-labelledby" and v == "h-bayar" for k, v in attrs):
+            self.in_section = True
+        if not self.in_section:
+            return
+        if tag == "dl":
+            self.dl_open += 1
+            self.dl_depth += 1
+        elif tag in ("dt", "dd") and self.dl_depth == 0:
+            self.stray_dt_dd += 1
+        elif tag == "br":
+            pass
+
+    def handle_endtag(self, tag):
+        if not self.in_section:
+            return
+        if tag == "dl":
+            self.dl_close += 1
+            self.dl_depth = max(0, self.dl_depth - 1)
+        elif tag == "section":
+            self.in_section = False
+
+    def handle_data(self, data):
+        if self.in_section:
+            self.texts.append(data)
+
+
+def _pay_section(html):
+    p = _PaySectionParser()
+    p.feed(html)
+    return p
+
+
+class PaymentSectionMarkup(t3.P):
+    """Regression: /akun payment section must render a well-formed dl in both NULL and priced
+    branches (dt/dd properly enclosed), and due date must show real due_at or 'belum ditetapkan'
+    — never a fabricated date and never a discarded one."""
+
+    def test_null_section_markup_balanced(self):
+        self.w.execute("UPDATE programs SET price_idr=349000, duration_days=30 WHERE id=2")
+        cl, mid = self.member(program="2")
+        pid = self.pay(mid)["id"]
+        self.w.execute("UPDATE payments SET amount_idr=NULL WHERE id=?", (pid,))
+        r = cl.get("/akun")
+        self.assertEqual(r.status_code, 200)
+        p = _pay_section(r.text)
+        self.assertEqual((p.dl_open, p.dl_close), (1, 1))   # exactly one dl, opened and closed
+        self.assertEqual(p.stray_dt_dd, 0)                  # every dt/dd inside that dl
+        low = "".join(p.texts).lower()
+        self.assertIn("info harga via admin", low)          # NULL nominal wording preserved
+        self.assertIn("belum ditetapkan", low)              # due row present even without due_at
+        self.assertNotIn("sudah lewat", low)
+
+    def test_priced_section_markup_balanced_and_due_at(self):
+        self.w.execute("UPDATE programs SET price_idr=349000, duration_days=30 WHERE id=2")
+        cl, mid = self.member(program="2")
+        pid = self.pay(mid)["id"]
+        due = "2026-11-30T14:30:00Z"
+        self.w.execute("UPDATE payments SET due_at=? WHERE id=?", (due, pid))
+        r = cl.get("/akun")
+        self.assertEqual(r.status_code, 200)
+        p = _pay_section(r.text)
+        self.assertEqual((p.dl_open, p.dl_close), (1, 1))
+        self.assertEqual(p.stray_dt_dd, 0)
+        joined = "".join(p.texts)
+        self.assertIn("2026-11-30 14:30", joined)           # real due_at displayed (T -> space)
+        self.assertIn("UTC", joined)
+        self.assertNotIn("belum ditetapkan", joined)        # present due_at must not be discarded
+        low = joined.lower()
+        self.assertIn("kode unik", low)                     # priced extras intact
+        self.assertIn("/akun/bayar/unggah", r.text)         # upload CTA still present
 
 
 if __name__ == "__main__":
