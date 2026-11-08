@@ -94,7 +94,7 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet, priv_dir):
             return bad
         err = None
         with lock, db.tx(conn):   # BEGIN IMMEDIATE: second concurrent approve re-reads status and sees 'approved'
-            r = conn.execute("SELECT p.status,p.proof_file_id,su.id sid,pr.duration_days FROM payments p "
+            r = conn.execute("SELECT p.status,p.proof_file_id,p.amount_idr,su.id sid,pr.duration_days FROM payments p "
                              "JOIN subscriptions su ON su.id=p.subscription_id JOIN programs pr ON pr.id=su.program_id "
                              "WHERE p.id=?", (pid,)).fetchone()
             if not r:
@@ -105,6 +105,8 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet, priv_dir):
                 err = "Belum ada bukti transfer."
             elif not r["duration_days"] or r["duration_days"] <= 0:
                 err = "Durasi program belum dikonfigurasi Owner; persetujuan diblokir."
+            elif r["amount_idr"] is None:
+                err = "Tagihan tanpa nominal (harga belum dikonfigurasi saat dibuat); persetujuan diblokir."
             else:
                 now = datetime.now(timezone.utc).replace(microsecond=0)
                 fmt = "%Y-%m-%dT%H:%M:%SZ"

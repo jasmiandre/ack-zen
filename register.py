@@ -373,8 +373,8 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet_key, priv_dir):
                 for slot, (name, enc) in stored.items():
                     conn.execute("INSERT INTO member_files(member_id,kind,stored_path,created_at,encrypted) VALUES(?,?,?,?,?)",
                                  (mid, slot, name, now, enc))
-                sid = conn.execute("INSERT INTO subscriptions(member_id,program_id,status,created_at) VALUES(?,?,'pending',?)",
-                                   (mid, prog["id"], now)).lastrowid
+                sid = conn.execute("INSERT INTO subscriptions(member_id,program_id,status,created_at,quote_price_idr) VALUES(?,?,'pending',?,?)",
+                                   (mid, prog["id"], now, prog["price_idr"])).lastrowid   # quote snapshot; NULL when program unconfigured at signup
                 if prog["price_idr"]:  # NULL = unconfigured and 0 = free: neither gets an invoice
                     conn.execute("INSERT INTO payments(invoice_code,subscription_id,amount_idr,status,created_at,unique_code,due_at) "
                                  "VALUES(?,?,?,'pending',?,?,?)",

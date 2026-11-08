@@ -192,7 +192,7 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet, priv_dir, bank_inf
 
     def dashboard(s, status=200, error=None):
         m, mid = me(s), s["member_id"]
-        sub = conn.execute("SELECT p.name,p.price_idr,s.status FROM subscriptions s JOIN programs p ON p.id=s.program_id "
+        sub = conn.execute("SELECT p.name,s.quote_price_idr,s.status FROM subscriptions s JOIN programs p ON p.id=s.program_id "
                            "WHERE s.member_id=? ORDER BY s.id DESC LIMIT 1", (mid,)).fetchone()
         pay = latest_payment(mid)
         pstate = None

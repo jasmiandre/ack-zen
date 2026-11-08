@@ -14,7 +14,7 @@ ROLES = ("owner", "finance", "verifier", "matchmaker", "event")
 ROLE_LABEL = {"owner": "Owner", "finance": "Admin Keuangan", "verifier": "Verifikator",
               "matchmaker": "Matchmaker", "event": "Event"}
 MIN_AGE = 18
-SCHEMA_VERSION = 10   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal; v4 = pending_file_cleanup; v6 = introductions quota/outcome cols; v5 = Stage 4 staff cols + app_settings (all additive, idempotent)
+SCHEMA_VERSION = 11   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal; v4 = pending_file_cleanup; v6 = introductions quota/outcome cols; v5 = Stage 4 staff cols + app_settings (all additive, idempotent)
 KTP_RETENTION_DAYS_DEFAULT = 30   # seeded into app_settings; ID-photo retention counted from verification approved_at
 PAY_HOURS = int(os.environ["ACK_PAY_HOURS"]) if os.environ.get("ACK_PAY_HOURS", "").isdigit() else None  # invoice deadline in hours; None = not set (no approved source) -> due_at NULL, UI "belum ditetapkan"
 
@@ -220,7 +220,8 @@ V3_COLS = {"payments": (("unique_code", "INTEGER CHECK(unique_code IS NULL OR un
            "introductions": (("resp_a", "TEXT CHECK(resp_a IS NULL OR resp_a IN ('tertarik','tidak'))"),
                              ("resp_b", "TEXT CHECK(resp_b IS NULL OR resp_b IN ('tertarik','tidak'))"),
                              ("match_reason", "TEXT"))}
-V5_COLS = {"subscriptions": (("starts_at", "TEXT"), ("ends_at", "TEXT")),          # set on payment approval; NULL = not started
+V5_COLS = {"subscriptions": (("starts_at", "TEXT"), ("ends_at", "TEXT"),
+                             ("quote_price_idr", "INTEGER CHECK(quote_price_idr IS NULL OR quote_price_idr>=0)")),  # starts/ends set on payment approval; NULL = not started. quote = price snapshot at signup; NULL = legacy (unconfigured then), NEVER backfilled
            "members": (("pipeline", "TEXT"), ("internal_notes", "TEXT"), ("next_followup_at", "TEXT")),
            "verifications": (("approved_at", "TEXT"), ("checklist", "TEXT"))}      # checklist = JSON text
 V6_COLS = {"introductions": (("quota_tracked", "INTEGER NOT NULL DEFAULT 0 CHECK(quota_tracked IN (0,1))"),   # 0 = legacy Stage-3 row, never charged

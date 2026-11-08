@@ -15,7 +15,7 @@
 {% if m.perlu_review %}<p class="hint">Data kamu sedang ditinjau tambahan oleh tim.</p>{% endif %}</section>
 
 <section aria-labelledby="h-bayar"><h2 id="h-bayar">Tagihan &amp; pembayaran</h2>
-{% if not pay %}<p>Info harga via admin.{% if sub and sub.price_idr is not none %} Harga {{ sub.name }}: {{ price(sub.price_idr) }}.{% endif %} Belum ada tagihan; tim akan menghubungi kamu.{% if wa %} <a href="https://wa.me/{{ wa }}">Hubungi admin via WhatsApp</a>.{% endif %}</p>
+{% if not pay %}<p>Info harga via admin.{% if sub and sub.quote_price_idr is not none %} Harga {{ sub.name }}: {{ price(sub.quote_price_idr) }}.{% endif %} Belum ada tagihan; tim akan menghubungi kamu.{% if wa %} <a href="https://wa.me/{{ wa }}">Hubungi admin via WhatsApp</a>.{% endif %}</p>
 {% else %}<p><span class="badge {{ pstate }}">{{ pay_label[pstate] }}</span> · No. tagihan {{ pay.invoice_code }}</p>
 {% if pay.reject_reason %}<p class="err banner-err">Alasan ditolak: {{ pay.reject_reason }}</p>{% endif %}
 <dl class="kv"><dt>Nominal transfer</dt><dd><strong>{{ rp(total) }}</strong>{% if pay.unique_code %} <span class="hint">(termasuk kode unik {{ '%03d' % pay.unique_code }}; transfer tepat sampai digit terakhir)</span>{% endif %}</dd>
