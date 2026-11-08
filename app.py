@@ -29,7 +29,10 @@ USER_RE = re.compile(r"[a-z0-9._-]{3,32}")
 AREAS = tuple(r for r in db.ROLES if r != "owner")
 
 
-def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=None, bank_info=None, wa_admin=None):
+PILOT_BLOCKED = re.compile(r"/(daftar/submit|event/tamu/submit|event/[^/]+/daftar|akun/(event/bukti|bayar/unggah|verifikasi/unggah)"
+                           r"|keuangan/(event/)?\d+/setuju)")
+
+def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=None, bank_info=None, wa_admin=None, pilot_open=None):
     env = seed.read_env(seed.ENV_PATH)
     db_path = db_path or seed.DB_PATH
     secret_key = secret_key or env.get("SECRET_KEY") or ""
@@ -39,6 +42,10 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
         fernet_key = env.get("FERNET_KEY") or ""
     if cookie_secure is None:
         cookie_secure = env.get("COOKIE_SECURE", "false").lower() == "true"
+
+    if pilot_open is None:  # strict: only the exact string "true" opens intake; anything else stays closed
+        pilot_open = (os.environ.get("PILOT_INTAKE_OPEN") or env.get("PILOT_INTAKE_OPEN") or "").strip() == "true"
+    app_state_open = bool(pilot_open)
 
     # ponytail: one shared sqlite connection, handlers are async (no await between DB calls) so writers
     # never interleave. Move to a connection-per-request pool if handlers become sync/threaded.
@@ -91,6 +98,13 @@ def create_app(db_path=None, secret_key=None, cookie_secure=None, fernet_key=Non
 
     def forbidden():
         return PlainTextResponse("Forbidden", status_code=403)
+
+    @app.middleware("http")
+    async def pilot_gate(request: Request, call_next):  # closed pilot: refuse before any handler touches files/DB
+        if not app_state_open and request.method == "POST" and PILOT_BLOCKED.fullmatch(request.url.path):
+            return PlainTextResponse("Pendaftaran & pembayaran pilot belum dibuka (PILOT_INTAKE_OPEN=true diperlukan).",
+                                     status_code=503, headers={"Retry-After": "86400"})
+        return await call_next(request)
 
     @app.middleware("http")
     async def headers(request: Request, call_next):

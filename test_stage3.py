@@ -35,7 +35,7 @@ class P(t2.Base):
 
     def reopen(self, **kw):
         self.c.__exit__()
-        self.app = create_app(db_path=self.dbp, secret_key=t2.SECRET, cookie_secure=False,
+        self.app = create_app(pilot_open=True, db_path=self.dbp, secret_key=t2.SECRET, cookie_secure=False,
                               fernet_key=t2.FKEY.decode(), **kw)
         self.c = TestClient(self.app, follow_redirects=False, raise_server_exceptions=False)
         self.c.__enter__()

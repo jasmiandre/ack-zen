@@ -30,7 +30,7 @@ def strings(o):
 class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.app = create_app(db_path=os.path.join(self.tmp.name, "t.db"), secret_key="test-secret-key-0123456789abcdef")
+        self.app = create_app(pilot_open=True, db_path=os.path.join(self.tmp.name, "t.db"), secret_key="test-secret-key-0123456789abcdef")
         self.c = TestClient(self.app, follow_redirects=False)
         self.c.__enter__()
         self.addCleanup(self.c.__exit__)

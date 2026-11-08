@@ -65,7 +65,7 @@ class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.dbp = os.path.join(self.tmp.name, "t.db")
-        self.app = create_app(db_path=self.dbp, secret_key=SECRET, cookie_secure=self.secure,
+        self.app = create_app(pilot_open=True, db_path=self.dbp, secret_key=SECRET, cookie_secure=self.secure,
                               fernet_key=FKEY.decode())
         self.c = TestClient(self.app, follow_redirects=False, raise_server_exceptions=False)
         self.c.__enter__()
@@ -241,7 +241,7 @@ class TestRegister(Base):
         self.assertIn("removeItem", js)
 
     def test_cookie_secure_flag_when_configured(self):
-        app = create_app(db_path=os.path.join(self.tmp.name, "s.db"), secret_key=SECRET, cookie_secure=True,
+        app = create_app(pilot_open=True, db_path=os.path.join(self.tmp.name, "s.db"), secret_key=SECRET, cookie_secure=True,
                          fernet_key=FKEY.decode())
         with TestClient(app) as c:
             self.assertIn("Secure", c.get("/daftar").headers["set-cookie"])
@@ -533,7 +533,7 @@ class TestRegister(Base):
             self.assertNotIn(pii, blob)
 
     def test_encryption_requires_key(self):
-        app = create_app(db_path=os.path.join(self.tmp.name, "n.db"), secret_key=SECRET, cookie_secure=False, fernet_key="")
+        app = create_app(pilot_open=True, db_path=os.path.join(self.tmp.name, "n.db"), secret_key=SECRET, cookie_secure=False, fernet_key="")
         with mock.patch.object(register.os, "environ", {}), TestClient(app, raise_server_exceptions=False) as c:
             if not os.path.exists(os.path.join(HERE, ".env")):
                 tok = re.search(r'name="csrf_token" value="([^"]+)"', c.get("/daftar").text).group(1)

@@ -247,7 +247,7 @@ class TestNoResourceWarning(unittest.TestCase):
         from app import create_app
         with warnings.catch_warnings(record=True) as w, tempfile.TemporaryDirectory() as d:
             warnings.simplefilter("always")
-            with TestClient(create_app(db_path=os.path.join(d, "x.db"), secret_key=t2.SECRET, cookie_secure=False,
+            with TestClient(create_app(pilot_open=True, db_path=os.path.join(d, "x.db"), secret_key=t2.SECRET, cookie_secure=False,
                                        fernet_key=t2.FKEY.decode())) as c:
                 c.get("/health")
             gc.collect()

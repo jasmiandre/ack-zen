@@ -211,7 +211,7 @@ class AppCase(DbCase):
         seed.seed_staff(self.conn, "owner", PW, self.cred)
         with open(self.cred) as f:
             self.creds = dict(l.strip().split(":", 1) for l in f if ":" in l and not l.startswith("#"))
-        self.app = create_app(db_path=self.path, secret_key="test-secret-key-0123456789abcdef", cookie_secure=False)
+        self.app = create_app(pilot_open=True, db_path=self.path, secret_key="test-secret-key-0123456789abcdef", cookie_secure=False)
         self.c = TestClient(self.app, follow_redirects=False)
         self.c.__enter__()  # runs lifespan; exit closes the app's sqlite connection
         self.addCleanup(self.c.__exit__)
@@ -253,7 +253,7 @@ class TestHttpBasics(AppCase):
         self.assertIn("no-store", h["cache-control"])
 
     def test_secure_cookie_when_configured(self):
-        app = create_app(db_path=self.path, secret_key="k" * 32, cookie_secure=True)
+        app = create_app(pilot_open=True, db_path=self.path, secret_key="k" * 32, cookie_secure=True)
         with TestClient(app, follow_redirects=False, base_url="https://testserver") as c:
             r = self.login(c, "owner", PW)
         self.assertEqual(r.status_code, 303)
@@ -396,7 +396,7 @@ class TestRoles(AppCase):
         self.assertIn("seed.read_env", src)
 
     def test_app_connection_closed_on_shutdown(self):
-        app = create_app(db_path=self.path, secret_key="test-secret-key-0123456789abcdef", cookie_secure=False)
+        app = create_app(pilot_open=True, db_path=self.path, secret_key="test-secret-key-0123456789abcdef", cookie_secure=False)
         with TestClient(app) as c:
             self.assertEqual(c.get("/health").status_code, 200)
         self.assertEqual(app.state.conn_closed, True)
