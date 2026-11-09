@@ -6,25 +6,62 @@ import json
 import os
 import re
 import unittest
+from html.parser import HTMLParser
 
+import consent_evidence
 import landing
-import register
 import test_stage2 as t2
 import test_stage4_staff as t4
 from fastapi.testclient import TestClient
 
 CSRF_RE = re.compile(r'name="csrf_token" value="([^"]+)"')
 
+CHECKBOX_KEYS = ("consent_terms", "consent_privacy", "consent_honest",
+                 "ktp_nik_ok", "ktp_addr_ok", "ktp_sign_ok")
 
-def canonical_legal():
+
+class CheckboxLabels(HTMLParser):
+    """Visible text per <label class="chk"> checkbox, keyed by input name.
+    convert_charrefs=True decodes entities; <a> inner text stays (it is visible)."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.pairs, self._name, self._buf = [], None, None
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "label" and "chk" in (a.get("class") or "").split():
+            self._name, self._buf = None, []
+        elif tag == "input" and self._buf is not None:
+            self._name = a.get("name")
+
+    def handle_data(self, data):
+        if self._buf is not None:
+            self._buf.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "label" and self._buf is not None:
+            if self._name:
+                self.pairs.append((self._name, " ".join("".join(self._buf).split())))
+            self._name, self._buf = None, None
+
+
+def checkbox_labels(html):
+    p = CheckboxLabels()
+    p.feed(html)
+    return dict(p.pairs)
+
+
+def canonical_legal(flow):
     legal = landing.load_content()["legal"]
-    return {"flow": None, "terms": legal["terms"], "privacy": legal["privacy"],
-            "checkboxes": register.CONSENT_BOXES, "ktp": register.KTP_BOXES}
+    boxes = (consent_evidence.NORMAL_CONSENT_BOXES if flow == "normal"
+             else consent_evidence.CONSENT_BOXES)
+    return {"flow": flow, "terms": legal["terms"], "privacy": legal["privacy"],
+            "checkboxes": boxes, "ktp": consent_evidence.KTP_BOXES}
 
 
 def expected_digest(flow):
-    snap = canonical_legal()
-    snap["flow"] = flow
+    snap = canonical_legal(flow)
     blob = json.dumps(snap, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
     return snap, hashlib.sha256(blob).hexdigest()
 
@@ -84,6 +121,22 @@ class ConsentEvidence(t4.S):
         self.assertEqual(g["terms"]["title"], src["terms"]["title"])
         self.assertEqual(g["privacy"]["paragraphs"], src["privacy"]["paragraphs"])
 
+    def test_get_renders_exact_checkbox_labels_guest_flow(self):
+        html = self.c.get("/event/dinner-demo/tamu").text
+        shown = checkbox_labels(html)
+        self.assertEqual([shown[k] for k in CHECKBOX_KEYS[:3]],
+                         [c["label"] for c in consent_evidence.CONSENT_BOXES])
+        self.assertEqual([shown[k] for k in CHECKBOX_KEYS[3:]],
+                         [c["label"] for c in consent_evidence.KTP_BOXES])
+
+    def test_get_renders_exact_checkbox_labels_normal_flow(self):
+        html = self.c.get("/daftar").text
+        shown = checkbox_labels(html)
+        self.assertEqual([shown[k] for k in CHECKBOX_KEYS[:3]],
+                         [c["label"] for c in consent_evidence.NORMAL_CONSENT_BOXES])
+        self.assertEqual([shown[k] for k in CHECKBOX_KEYS[3:]],
+                         [c["label"] for c in consent_evidence.KTP_BOXES])
+
     def test_guest_get_and_normal_get_render_signed_binding(self):
         for path, flow in (("/event/dinner-demo/tamu", "guest"), ("/daftar", "normal")):
             html = self.c.get(path).text
@@ -102,10 +155,11 @@ class ConsentEvidence(t4.S):
         self.assertEqual(snap["terms"], shown["terms"])
         self.assertEqual(snap["privacy"], shown["privacy"])
         self.assertEqual(snap["flow"], "guest")
+        shown_labels = checkbox_labels(r0.text)
         self.assertEqual([c["label"] for c in snap["checkboxes"]],
-                         ["Setuju syarat & ketentuan", "Setuju kebijakan privasi", "Data yang saya isi benar"])
+                         [shown_labels[k] for k in CHECKBOX_KEYS[:3]])
         self.assertEqual([c["label"] for c in snap["ktp"]],
-                         ["NIK sudah tertutup", "Alamat sudah tertutup", "Tanda tangan sudah tertutup"])
+                         [shown_labels[k] for k in CHECKBOX_KEYS[3:]])
         self.assertEqual(row["consent_digest"], dig)
         self.assertTrue(row["consented_at"])
 
@@ -176,6 +230,11 @@ class ConsentEvidence(t4.S):
         self.assertEqual(snap["terms"], shown["terms"])
         self.assertEqual(snap["privacy"], shown["privacy"])
         self.assertEqual(snap["flow"], "normal")
+        shown_labels = checkbox_labels(r0.text)
+        self.assertEqual([c["label"] for c in snap["checkboxes"]],
+                         [shown_labels[k] for k in CHECKBOX_KEYS[:3]])
+        self.assertEqual([c["label"] for c in snap["ktp"]],
+                         [shown_labels[k] for k in CHECKBOX_KEYS[3:]])
         self.assertEqual(row["consent_digest"], dig)
         self.assertTrue(row["consented_at"])
 

@@ -13,6 +13,11 @@ import landing
 CONSENT_BOXES = ({"key": "consent_terms", "label": "Setuju syarat & ketentuan"},
                  {"key": "consent_privacy", "label": "Setuju kebijakan privasi"},
                  {"key": "consent_honest", "label": "Data yang saya isi benar"})
+NORMAL_CONSENT_BOXES = (
+    {"key": "consent_terms", "label": "Saya menyetujui syarat & ketentuan (draf)"},
+    {"key": "consent_privacy", "label": "Saya menyetujui kebijakan privasi (draf)"},
+    {"key": "consent_honest", "label": "Saya menyatakan data dan status saya jujur dan benar"},
+)
 KTP_BOXES = ({"key": "ktp_nik_ok", "label": "NIK sudah tertutup"},
              {"key": "ktp_addr_ok", "label": "Alamat sudah tertutup"},
              {"key": "ktp_sign_ok", "label": "Tanda tangan sudah tertutup"})
@@ -24,7 +29,8 @@ def canonical_snapshot(flow, legal=None):
     consented_at is stored separately on members."""
     legal = legal or landing.load_content()["legal"]
     return {"flow": flow, "terms": legal["terms"], "privacy": legal["privacy"],
-            "checkboxes": list(CONSENT_BOXES), "ktp": list(KTP_BOXES)}
+            "checkboxes": list(NORMAL_CONSENT_BOXES if flow == "normal" else CONSENT_BOXES),
+            "ktp": list(KTP_BOXES)}
 
 
 def digest(snapshot):
