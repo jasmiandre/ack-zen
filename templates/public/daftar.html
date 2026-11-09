@@ -99,8 +99,8 @@
 <span class="pb">{{ p.benefits.replace("\n", " · ") }}</span><span class="pp">{{ price(p.price_idr) }}</span></label>{% endfor %}
 </div><p class="err" data-err="program_id" role="alert"></p>
 <p class="hint">Mendaftar membuat langganan berstatus menunggu. Belum ada pembayaran pada tahap ini.</p>
-<label class="chk"><input type="checkbox" name="consent_terms" required> Saya menyetujui <a href="#syarat" class="lg">syarat &amp; ketentuan</a> (draf)</label>
-<label class="chk"><input type="checkbox" name="consent_privacy" required> Saya menyetujui <a href="#privasi" class="lg">kebijakan privasi</a> (draf)</label>
+<label class="chk"><input type="checkbox" name="consent_terms" required> <span>Saya menyetujui <a href="#syarat" class="lg">syarat &amp; ketentuan</a> (draf)</span></label>
+<label class="chk"><input type="checkbox" name="consent_privacy" required> <span>Saya menyetujui <a href="#privasi" class="lg">kebijakan privasi</a> (draf)</span></label>
 <label class="chk"><input type="checkbox" name="consent_honest" required> Saya menyatakan data dan status saya jujur dan benar</label>
 <p class="err" data-err="consent_terms consent_privacy consent_honest" role="alert"></p>
 <details id="syarat"><summary>{{ legal.terms.title }}</summary>{% for t in legal.terms.paragraphs %}<p>{{ t }}</p>{% endfor %}</details>

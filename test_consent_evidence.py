@@ -52,6 +52,51 @@ def checkbox_labels(html):
     return dict(p.pairs)
 
 
+class CheckboxTextSpans(HTMLParser):
+    """After each checkbox input: list of immediate-child span texts of the label.
+    Flex layout treats each contiguous text run as a separate item; wrapping the
+    text in one span keeps the checkbox as the only other flex item, so mobile
+    rows stay two columns instead of fragmenting into one column per text run."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.spans, self._in_chk, self._name, self._depth, self._buf = [], False, None, 0, None
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "label" and "chk" in (a.get("class") or "").split():
+            self._in_chk, self._name, self._depth, self._buf = True, None, 0, None
+        elif self._in_chk and tag == "input":
+            self._name = a.get("name")
+        elif self._in_chk and self._name and tag == "span" and self._depth == 0:
+            self._depth, self._buf = 1, []
+        elif self._buf is not None:
+            self._depth += 1
+
+    def handle_data(self, data):
+        if self._buf is not None:
+            self._buf.append(data)
+
+    def handle_endtag(self, tag):
+        if self._in_chk and tag == "label":
+            self._in_chk, self._name, self._depth, self._buf = False, None, 0, None
+        elif self._buf is not None:
+            if tag == "span" and self._depth == 1:
+                self.spans.append((self._name, " ".join("".join(self._buf).split())))
+                self._depth, self._buf = 0, None
+            else:
+                self._depth -= 1
+
+
+def checkbox_text_spans(html):
+    p = CheckboxTextSpans()
+    p.feed(html)
+    grouped = {}
+    for name, text in p.spans:
+        grouped.setdefault(name, []).append(text)
+    return grouped
+
+
 def canonical_legal(flow):
     legal = landing.load_content()["legal"]
     boxes = (consent_evidence.NORMAL_CONSENT_BOXES if flow == "normal"
@@ -136,6 +181,15 @@ class ConsentEvidence(t4.S):
                          [c["label"] for c in consent_evidence.NORMAL_CONSENT_BOXES])
         self.assertEqual([shown[k] for k in CHECKBOX_KEYS[3:]],
                          [c["label"] for c in consent_evidence.KTP_BOXES])
+
+    def test_get_wraps_consent_text_in_single_span_per_checkbox(self):
+        html = self.c.get("/daftar").text
+        spans = checkbox_text_spans(html)
+        labels = checkbox_labels(html)
+        for key in CHECKBOX_KEYS[:2]:
+            span_texts = spans[key]
+            self.assertEqual(len(span_texts), 1, (key, span_texts))
+            self.assertEqual(span_texts[0], labels[key])
 
     def test_guest_get_and_normal_get_render_signed_binding(self):
         for path, flow in (("/event/dinner-demo/tamu", "guest"), ("/daftar", "normal")):
