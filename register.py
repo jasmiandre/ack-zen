@@ -1,5 +1,6 @@
 """ACK Stage 2: member registration (/daftar), member session pages (/akun), private image handling.
 Dummy data only. Nothing here logs form values; audit rows carry the member code only."""
+import json
 import logging
 import os
 import re
@@ -15,6 +16,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from PIL import Image, ImageOps
 
 import auth
+import consent_evidence
 import db
 import landing
 
@@ -39,6 +41,8 @@ EDUCATION = ("SMA/SMK", "D3", "S1", "S2", "S3", "Lainnya")
 PUBLISH = {"ya": "Ya", "tidak": "Tidak", "ya_blur": "Ya, dengan wajah diblur"}
 SOURCE = ("Instagram", "TikTok", "WhatsApp", "Teman/Keluarga", "Event", "Lainnya")
 PREF_RELIGION = ("Bebas",) + RELIGION
+CONSENT_BOXES = consent_evidence.CONSENT_BOXES   # re-exported: tests + events use register.*
+KTP_BOXES = consent_evidence.KTP_BOXES
 STEP_OF = {"full_name": 1, "phone": 1, "email": 1, "password": 1, "password2": 1,
            "gender": 2, "birth_date": 2, "domicile": 2, "ethnicity": 2, "marga": 2, "occupation": 2, "religion": 2,
            "marital_status": 2, "education": 2, "height_cm": 2,
@@ -295,7 +299,9 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet_key, priv_dir):
     async def form(request: Request):
         progs = conn.execute("SELECT id,name,description,benefits,price_idr FROM programs WHERE active=1 "
                              "ORDER BY sort_order").fetchall()
+        snap = consent_evidence.canonical_snapshot("normal")
         return with_session(request, "public/daftar.html", progs=progs, price=db.price_label, legal=landing.load_content()["legal"],
+                            consent_binding=consent_evidence.sign(snap, secret_key),
                             o=dict(gender=GENDER, ethnicity=ETHNICITY, religion=RELIGION, marital=MARITAL,
                                    education=EDUCATION, publish=PUBLISH, source=SOURCE, pref_religion=PREF_RELIGION),
                             max_mb=MAX_IMG // 1024 // 1024)
@@ -320,6 +326,9 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet_key, priv_dir):
 
     async def _register(request, form, s):
         text = {k: v for k, v in form.items() if isinstance(v, str)}
+        snap = consent_evidence.verify_binding(text.get("consent_binding"), "normal", secret_key)
+        if snap is None or not consent_evidence.binding_matches_content(snap):
+            return err({"consent_terms": "Persetujuan tidak valid. Muat ulang halaman."})  # before any DB/file writes
         clean, errors, _ = validate(text)
         ups = {k: v for k, v in form.items() if not isinstance(v, str)}
         for k in ups:
@@ -362,13 +371,15 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet_key, priv_dir):
                 mid = conn.execute(
                     "INSERT INTO members(code,full_name,birth_date,status,created_at,email,email_key,phone,password_hash,"
                     "gender,domicile,ethnicity,marga,religion,marital_status,education,height_cm,intro,pref_age_min,"
-                    "pref_age_max,pref_religion,pref_domicile,pref_notes,publish_consent,source,perlu_review,consented_at) "
-                    "VALUES(?,?,?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "pref_age_max,pref_religion,pref_domicile,pref_notes,publish_consent,source,perlu_review,consented_at,"
+                    "consent_text,consent_digest) "
+                    "VALUES(?,?,?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (code, clean["full_name"], clean["birth_date"], now, clean["email"], clean["email_key"], clean["phone"],
                      pw_hash, clean["gender"], clean["domicile"], clean["ethnicity"], clean["marga"], clean["religion"],
                      clean["marital_status"], clean["education"], clean["height_cm"], clean["intro"], clean["pref_age_min"],
                      clean["pref_age_max"], clean["pref_religion"], clean["pref_domicile"], clean["pref_notes"],
-                     clean["publish_consent"], clean["source"], clean["perlu_review"], now)).lastrowid
+                     clean["publish_consent"], clean["source"], clean["perlu_review"], now,
+                     json.dumps(snap, ensure_ascii=False, sort_keys=True), consent_evidence.digest(snap))).lastrowid
                 conn.execute("UPDATE members SET occupation=? WHERE id=?", (clean["occupation"], mid))
                 for slot, (name, enc) in stored.items():
                     conn.execute("INSERT INTO member_files(member_id,kind,stored_path,created_at,encrypted) VALUES(?,?,?,?,?)",

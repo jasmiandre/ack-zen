@@ -36,11 +36,17 @@ class G(t4.S):
 
     def post(self, f=None, fl=None, cl=None, csrf=None):
         cl = cl or TestClient(self.app, follow_redirects=False, raise_server_exceptions=False)
-        if csrf is None:
+        data = gf() if f is None else dict(f)
+        if csrf is None or "consent_binding" not in data:   # readiness v12: bind to the GET, like a real client
             r = cl.get("/event/dinner-demo/tamu")
-            self.assertEqual(r.status_code, 200)
-            csrf = re.search(r'name="csrf_token" value="([^"]+)"', r.text).group(1)
-        return cl.post("/event/tamu/submit", data=gf() if f is None else f, files=gfiles() if fl is None else fl,
+            if r.status_code == 200:
+                if csrf is None:
+                    csrf = re.search(r'name="csrf_token" value="([^"]+)"', r.text).group(1)
+                if "consent_binding" not in data:
+                    m = re.search(r'name="consent_binding" value="([^" ]+)"', r.text)
+                    if m:
+                        data["consent_binding"] = m.group(1)
+        return cl.post("/event/tamu/submit", data=data, files=gfiles() if fl is None else fl,
                        headers={"X-CSRF-Token": csrf})
 
     def rd(self, n):
@@ -95,9 +101,11 @@ class G(t4.S):
         cl = TestClient(self.app)
         r = cl.get("/event/dinner-demo/tamu")
         self.w.execute("UPDATE events SET active=1")
-        csrf = re.search(r'name="csrf_token" value="([^"]+)"', cl.get("/event/dinner-demo/tamu").text).group(1)
+        page = cl.get("/event/dinner-demo/tamu")
+        csrf = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
+        binding = re.search(r'name="consent_binding" value="([^" ]+)"', page.text).group(1)  # seen while active
         self.w.execute("UPDATE events SET active=0")
-        r = self.post(cl=cl, csrf=csrf)
+        r = self.post(cl=cl, csrf=csrf, f=gf(consent_binding=binding))
         self.assertEqual(r.status_code, 404)
         self.assertEqual((self.cnt("members"), self.cnt("event_regs")), (0, 0))
         self.assertFalse(os.path.isdir(self.priv) and [x for x in os.listdir(self.priv) if x.endswith((".enc", ".jpg"))])

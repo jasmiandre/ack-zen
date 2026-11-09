@@ -20,6 +20,8 @@ import segno
 import auth
 import db
 import portal
+import consent_evidence
+import landing
 import register
 
 EVENT_STAFF = {"event", "owner"}
@@ -419,8 +421,10 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet=None, priv_dir=None
         if not s:
             t, csrf, ttl = auth.create_member_session(conn, secret_key)
             s, fresh = {"csrf": csrf}, (t, ttl)
+        snap = consent_evidence.canonical_snapshot("guest")
         r = render("public/event_tamu.html", status, None, s["csrf"], e=e, schema=json.loads(e["extra_fields"] or "[]"),
-                   gender=register.GENDER, max_mb=register.MAX_IMG // 1024 // 1024)
+                   gender=register.GENDER, max_mb=register.MAX_IMG // 1024 // 1024,
+                   legal=landing.load_content()["legal"], consent_binding=consent_evidence.sign(snap, secret_key))
         if fresh:
             r.set_cookie(auth.MEMBER_COOKIE, fresh[0], max_age=fresh[1], httponly=True, samesite="lax", secure=cookie_secure, path="/")
         return r
@@ -453,6 +457,12 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet=None, priv_dir=None
 
     async def guest_register(s, form):
         text = {k: v for k, v in form.items() if isinstance(v, str)}
+        snap = consent_evidence.verify_binding(text.get("consent_binding"), "guest", secret_key)
+        if snap is None or not consent_evidence.binding_matches_content(snap):
+            # absent/tampered/stale/cross-flow: reject before any DB row or private-file write
+            return JSONResponse({"ok": False,
+                                 "errors": {"consent_terms": "Persetujuan tidak valid. Muat ulang halaman."}},
+                                status_code=400)
         e = conn.execute("SELECT * FROM events WHERE slug=? AND active=1", (text.get("slug", ""),)).fetchone()
         if not e:
             return JSONResponse({"ok": False, "error": "Event tidak tersedia."}, status_code=404)
@@ -499,10 +509,11 @@ def mount(app, conn, jenv, secret_key, cookie_secure, fernet=None, priv_dir=None
                         raise LookupError
                     code = db.next_member_code(conn)
                     mid = conn.execute(
-                        "INSERT INTO members(code,full_name,birth_date,status,created_at,email,email_key,phone,password_hash,gender,consented_at) "
-                        "VALUES(?,?,?,'pending',?,?,?,?,?,?,?)",
+                        "INSERT INTO members(code,full_name,birth_date,status,created_at,email,email_key,phone,password_hash,gender,consented_at,consent_text,consent_digest) "
+                        "VALUES(?,?,?,'pending',?,?,?,?,?,?,?,?,?)",
                         (code, clean["full_name"], clean["birth_date"], now, clean["email"], clean["email_key"], clean["phone"],
-                         pw_hash, clean["gender"], now)).lastrowid
+                         pw_hash, clean["gender"], now,
+                         json.dumps(snap, ensure_ascii=False, sort_keys=True), consent_evidence.digest(snap))).lastrowid
                     for slot, (name, enc) in stored.items():
                         conn.execute("INSERT INTO member_files(member_id,kind,stored_path,created_at,encrypted) VALUES(?,?,?,?,?)",
                                      (mid, slot, name, now, enc))

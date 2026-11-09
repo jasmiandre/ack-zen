@@ -85,10 +85,19 @@ class Base(unittest.TestCase):
         self.assertTrue(m, r.status_code)
         return m.group(1)
 
+    def binding(self, client=None):   # readiness v12: same GET, real client flow (no bypass)
+        r = (client or self.c).get("/daftar")
+        m = re.search(r'name="consent_binding" value="([^" ]+)"', r.text)
+        self.assertTrue(m, r.status_code)
+        return m.group(1)
+
     def submit(self, f=None, fl=None, client=None, csrf=None):
         c = client or self.c
         tok = csrf if csrf is not None else self.csrf(c)
-        return c.post("/daftar/submit", data=f if f is not None else fields(),
+        data = f if f is not None else fields()
+        if "consent_binding" not in data:
+            data = dict(data, consent_binding=self.binding(c))
+        return c.post("/daftar/submit", data=data,
                       files=fl if fl is not None else files(), headers={"X-CSRF-Token": tok})
 
     def n(self, table):

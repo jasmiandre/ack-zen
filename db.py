@@ -14,7 +14,7 @@ ROLES = ("owner", "finance", "verifier", "matchmaker", "event")
 ROLE_LABEL = {"owner": "Owner", "finance": "Admin Keuangan", "verifier": "Verifikator",
               "matchmaker": "Matchmaker", "event": "Event"}
 MIN_AGE = 18
-SCHEMA_VERSION = 11   # PRAGMA user_version; v2 = Stage 2 registration cols; v3 = Stage 3 portal; v4 = pending_file_cleanup; v6 = introductions quota/outcome cols; v5 = Stage 4 staff cols + app_settings (all additive, idempotent)
+SCHEMA_VERSION = 12   # PRAGMA user_version; v12 = consent evidence cols; v2 = Stage 2 registration cols; v3 = Stage 3 portal; v4 = pending_file_cleanup; v6 = introductions quota/outcome cols; v5 = Stage 4 staff cols + app_settings (all additive, idempotent)
 KTP_RETENTION_DAYS_DEFAULT = 30   # seeded into app_settings; ID-photo retention counted from verification approved_at
 PAY_HOURS = int(os.environ["ACK_PAY_HOURS"]) if os.environ.get("ACK_PAY_HOURS", "").isdigit() else None  # invoice deadline in hours; None = not set (no approved source) -> due_at NULL, UI "belum ditetapkan"
 
@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS members(
   birth_date TEXT NOT NULL CHECK(birth_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
                                  AND date(birth_date)=birth_date),
   status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','pending','verified','rejected')),
-  created_at TEXT NOT NULL);
+  created_at TEXT NOT NULL,
+  consent_text TEXT, consent_digest TEXT);   -- readiness v12: server-owned snapshot; legacy rows NULL
 CREATE TABLE IF NOT EXISTS member_files(
   id INTEGER PRIMARY KEY,
   member_id INTEGER NOT NULL REFERENCES members(id),
@@ -250,6 +251,7 @@ V10_SQL = (   # additive: event pairing rounds, post-event picks, event-only mut
     "member_a INTEGER NOT NULL REFERENCES members(id), member_b INTEGER NOT NULL REFERENCES members(id), "
     "source TEXT NOT NULL DEFAULT 'event_mutual_pick', created_at TEXT NOT NULL, CHECK(member_a<member_b), UNIQUE(event_id,member_a,member_b))",
 )
+V12_COLS = {"members": (("consent_text", "TEXT"), ("consent_digest", "TEXT"))}   # legacy/imported rows stay NULL: unknown consent is unknown, never backfilled
 EVENT_REG_STATUS = "('registered','selected','proof_uploaded','paid','checked_in','cancelled')"
 FILE_COLS = (("encrypted", "INTEGER NOT NULL DEFAULT 0 CHECK(encrypted IN (0,1))"),)
 
@@ -258,7 +260,9 @@ def migrate(conn):
     if conn.execute("PRAGMA user_version").fetchone()[0] >= SCHEMA_VERSION:
         return
     with tx(conn):
-        for table, cols in (("members", MEMBER_COLS), ("member_files", FILE_COLS), *V3_COLS.items(), *V5_COLS.items(), *V6_COLS.items(), *V7_COLS.items(), *V8_COLS.items(), *V9_COLS.items()):
+        for table, cols in (("members", MEMBER_COLS), ("member_files", FILE_COLS), *V3_COLS.items(), *V5_COLS.items(), *V6_COLS.items(), *V7_COLS.items(), *V8_COLS.items(), *V9_COLS.items(),
+                            *V12_COLS.items()):   # readiness v12: consent evidence columns (additive, legacy rows stay NULL)
+
             have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
             for name, ddl in cols:
                 if name not in have:

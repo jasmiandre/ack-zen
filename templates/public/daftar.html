@@ -28,7 +28,7 @@
 <noscript><p class="err">Formulir ini membutuhkan JavaScript (untuk menyensor KTP di browser sebelum dikirim).</p></noscript>
 <p id="formerr" class="err banner-err" role="alert"></p>
 <form id="reg" method="post" action="/daftar/submit" enctype="multipart/form-data" novalidate autocomplete="off">
-<input type="hidden" name="csrf_token" value="{{ csrf }}">
+<input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="consent_binding" value="{{ consent_binding }}">
 
 <fieldset class="step" data-step="1"><legend>1. Akun</legend>
 {{ inp("full_name", "Nama lengkap", extra='maxlength="100" autocomplete="name"') }}

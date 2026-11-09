@@ -11,7 +11,7 @@
 <p id="formerr" class="err banner-err" role="alert"></p>
 <p id="login-link" hidden><a href="/akun/masuk">Akun sudah ada — masuk di sini</a></p>
 <form id="reg" novalidate autocomplete="off">
-<input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="slug" value="{{ e.slug }}">
+<input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="consent_binding" value="{{ consent_binding }}"><input type="hidden" name="slug" value="{{ e.slug }}">
 {% macro inp(name, label, type="text", extra="") %}<label for="{{ name }}">{{ label }}</label><input id="{{ name }}" name="{{ name }}" type="{{ type }}" required {{ extra|safe }}><p class="err" data-err="{{ name }}" role="alert"></p>{% endmacro %}
 {{ inp("full_name", "Nama lengkap", "text", 'maxlength="100" autocomplete="name"') }}
 {{ inp("phone", "No. HP", "tel", 'maxlength="20" autocomplete="tel"') }}
@@ -45,6 +45,8 @@
 <label class="chk"><input type="checkbox" name="consent_terms"> Setuju syarat &amp; ketentuan</label>
 <label class="chk"><input type="checkbox" name="consent_privacy"> Setuju kebijakan privasi</label>
 <label class="chk"><input type="checkbox" name="consent_honest"> Data yang saya isi benar</label>
+<details id="syarat"><summary>{{ legal.terms.title }}</summary>{% for t in legal.terms.paragraphs %}<p>{{ t }}</p>{% endfor %}</details>
+<details id="privasi"><summary>{{ legal.privacy.title }}</summary>{% for t in legal.privacy.paragraphs %}<p>{{ t }}</p>{% endfor %}</details>
 <p class="err" data-err="consent_terms consent_privacy consent_honest" role="alert"></p>
 <progress id="up-progress" max="100" hidden></progress><p id="up-status" aria-live="polite"></p>
 <div class="nav"><button class="btn" id="send">Kirim pendaftaran</button></div></form></main>
